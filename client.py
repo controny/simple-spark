@@ -55,9 +55,11 @@ class Client:
             blk_path = dfs_path + ".blk{}".format(row['blk_no'])
             
             request = "store {}".format(blk_path)
-            data_node_sock.send(bytes(request, encoding='utf-8'))
+            status = data_node_sock.send(bytes(request, encoding='utf-8'))
+            print('status of requesting: ', status)
             time.sleep(0.2)  # 两次传输需要间隔一段时间，避免粘包
-            data_node_sock.send(bytes(data, encoding='utf-8'))
+            status = data_node_sock.send(bytes(data, encoding='utf-8'))
+            print('status of sending data: ', status)
             data_node_sock.close()
         fp.close()
     

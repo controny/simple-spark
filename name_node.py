@@ -25,7 +25,7 @@ class NameNode:
             # 监听端口
             listen_fd.bind(("0.0.0.0", name_node_port))
             listen_fd.listen(5)
-            print("Name node started")
+            print("Name node listening at port %s" % name_node_port)
             while True:
                 # 等待连接，连接后返回通信用的套接字
                 sock_fd, addr = listen_fd.accept()

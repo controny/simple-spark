@@ -19,6 +19,7 @@ class DataNode:
             # 监听端口
             listen_fd.bind(("0.0.0.0", data_node_port))
             listen_fd.listen(5)
+            print('data node listening at port %s' % data_node_port)
             while True:
                 # 等待连接，连接后返回通信用的套接字
                 sock_fd, addr = listen_fd.accept()
