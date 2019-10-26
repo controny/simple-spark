@@ -13,5 +13,5 @@ os.system(command_kill)
 command_kill = command_kill_pattern % os.path.join(cur_dir, 'data_node.py')
 for slave in host_list:
     command_remote_kill = 'ssh %s \'%s\'' % (slave, command_kill)
-    print('command to kill data node: ', command_remote_kill)
+    print('command to kill data node [%s]: %s' % (slave, command_remote_kill))
     os.system(command_remote_kill)
