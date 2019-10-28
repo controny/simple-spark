@@ -100,13 +100,16 @@ class NameNode:
         print(file_size, nb_blks)
         
         # todo 如果dfs_replication为复数时可以新增host_name的数目
-        data_pd = pd.DataFrame(columns=['blk_no', 'host_name', 'blk_size'])
+        data_pd = pd.DataFrame(columns=['blk_no', 'host_names', 'blk_size'])
         
         for i in range(nb_blks):
             blk_no = i
-            host_name = np.random.choice(host_list, size=dfs_replication, replace=False)[0]
+            num_replication = min(dfs_replication, len(host_list))  # in case that the number of hosts is less
+            host_names = np.random.choice(host_list, size=num_replication, replace=False)
+            host_names_str = ','.join(host_names)
+            print('host name', host_names_str)
             blk_size = min(dfs_blk_size, file_size - i * dfs_blk_size)
-            data_pd.loc[i] = [blk_no, host_name, blk_size]
+            data_pd.loc[i] = [blk_no, host_names_str, blk_size]
         
         # 获取本地路径
         local_path = name_node_dir + dfs_path

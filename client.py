@@ -1,5 +1,6 @@
 # coding=utf-8
 import os
+import numpy as np
 import socket
 import time
 from io import StringIO
@@ -50,17 +51,17 @@ class Client:
         for idx, row in fat.iterrows():
             data = fp.read(int(row['blk_size']))
             
-            data_node_sock = socket.socket()
-            data_node_sock.connect((row['host_name'], data_node_port))
-            blk_path = dfs_path + ".blk{}".format(row['blk_no'])
-            
-            request = "store {}".format(blk_path)
-            status = data_node_sock.send(bytes(request, encoding='utf-8'))
-            print('status of requesting: ', status)
-            time.sleep(0.2)  # 两次传输需要间隔一段时间，避免粘包
-            status = data_node_sock.send(bytes(data, encoding='utf-8'))
-            print('status of sending data: ', status)
-            data_node_sock.close()
+            for host_name in parse_host_names(row['host_names']):
+                data_node_sock = socket.socket()
+                print('connecting', host_name)
+                data_node_sock.connect((host_name, data_node_port))
+                blk_path = dfs_path + ".blk{}".format(row['blk_no'])
+
+                request = "store {}".format(blk_path)
+                data_node_sock.send(bytes(request, encoding='utf-8'))
+                time.sleep(0.2)  # 两次传输需要间隔一段时间，避免粘包
+                data_node_sock.send(bytes(data, encoding='utf-8'))
+                data_node_sock.close()
         fp.close()
     
     def copyToLocal(self, dfs_path, local_path):
@@ -80,7 +81,9 @@ class Client:
         fp = open(local_path, "w")
         for idx, row in fat.iterrows():
             data_node_sock = socket.socket()
-            data_node_sock.connect((row['host_name'], data_node_port))
+            # randomly choose a host
+            host_name = np.random.choice(parse_host_names(row['host_names']), size=1)[0]
+            data_node_sock.connect((host_name, data_node_port))
             blk_path = dfs_path + ".blk{}".format(row['blk_no'])
             
             request = "load {}".format(blk_path)
@@ -107,16 +110,17 @@ class Client:
         
         # 根据FAT表逐个告诉目标DataNode删除对应数据块
         for idx, row in fat.iterrows():
-            data_node_sock = socket.socket()
-            data_node_sock.connect((row['host_name'], data_node_port))
-            blk_path = dfs_path + ".blk{}".format(row['blk_no'])
-            
-            request = "rm {}".format(blk_path)
-            data_node_sock.send(bytes(request, encoding='utf-8'))
-            response_msg = data_node_sock.recv(BUF_SIZE)
-            print(response_msg)
-            
-            data_node_sock.close()
+            for host_name in parse_host_names(row['host_names']):
+                data_node_sock = socket.socket()
+                data_node_sock.connect((host_name, data_node_port))
+                blk_path = dfs_path + ".blk{}".format(row['blk_no'])
+
+                request = "rm {}".format(blk_path)
+                data_node_sock.send(bytes(request, encoding='utf-8'))
+                response_msg = data_node_sock.recv(BUF_SIZE)
+                print(response_msg)
+
+                data_node_sock.close()
     
     def format(self):
         request = "format"
@@ -133,6 +137,11 @@ class Client:
             print(str(data_node_sock.recv(BUF_SIZE), encoding='utf-8'))
             
             data_node_sock.close()
+
+
+def parse_host_names(host_names):
+    """Transform host names string to list"""
+    return host_names.split(',')
 
 
 # 解析命令行参数并执行对于的命令
