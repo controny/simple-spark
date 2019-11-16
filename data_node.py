@@ -1,6 +1,8 @@
 # coding=utf-8
 import os
 import socket
+import pandas as pd
+import numpy as np
 
 from common import *
 
@@ -44,6 +46,9 @@ class DataNode:
                         response = self.rm(dfs_path)
                     elif cmd == "format":  # 格式化DFS
                         response = self.format()
+                    elif cmd == "reduce":  # 格式化DFS
+                        dfs_path = request[1]
+                        response = self.reduce(dfs_path)
                     else:
                         response = "Undefined command: " + " ".join(request)
                     
@@ -93,6 +98,27 @@ class DataNode:
         os.system(format_command)
         
         return "Format datanode successfully~"
+
+    def reduce(self, dfs_path):
+        """Compute Sum(X), Sum(X^2) and Count(X) locally"""
+        local_path = data_node_dir + dfs_path
+        numbers = []
+        with open(local_path) as f:
+            for line in f.readlines():
+                # Skip the first column and parse the others as float
+                numbers.extend([float(x) for x in line.strip().split(' ')[1:]])
+        numbers = np.asarray(numbers)
+        local_count = len(numbers)
+        local_sum = np.sum(numbers)
+        local_sum_square = np.sum(np.square(numbers))
+        data_pd = pd.DataFrame(
+            data={
+                'sum': local_sum,
+                'sum_square': local_sum_square,
+                'count': local_count
+            })
+
+        return data_pd.to_csv(index=False)
 
 
 # 创建DataNode对象并启动

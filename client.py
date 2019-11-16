@@ -8,6 +8,7 @@ from io import StringIO
 import pandas as pd
 
 from common import *
+from utils import *
 
 
 class Client:
@@ -33,7 +34,11 @@ class Client:
     def copyFromLocal(self, local_path, dfs_path):
         file_size = os.path.getsize(local_path)
         print("File size: {}".format(file_size))
-        
+
+        # In case that the dfs_path is a directory path
+        if os.path.basename(dfs_path) == '':
+            dfs_path = os.path.join(dfs_path, os.path.basename(local_path))
+
         request = "new_fat_item {} {}".format(dfs_path, file_size)
         print("Request: {}".format(request))
         
@@ -138,10 +143,45 @@ class Client:
             
             data_node_sock.close()
 
+    def mapReduce(self, dfs_path):
+        # TODO Split by line instead of original bulk
+        request = "map_reduce_assign {}".format(dfs_path)
+        print("Request: {}".format(request))
 
-def parse_host_names(host_names):
-    """Transform host names string to list"""
-    return host_names.split(',')
+        # Get assignment table from Name Node
+        self.name_node_sock.send(bytes(request, encoding='utf-8'))
+        assign_pd = self.name_node_sock.recv(BUF_SIZE)
+        assign_pd = str(assign_pd, encoding='utf-8')
+        print("Assign: \n{}".format(assign_pd))
+        assign_table = pd.read_csv(StringIO(assign_pd))
+
+        local_sums = []
+        local_sum_squares = []
+        local_counts = []
+        for idx, row in assign_table.iterrows():
+            # Let each data node perform reducing operation
+            data_node_sock = socket.socket()
+            data_node_sock.connect((row['host_name'], data_node_port))
+
+            blk_path = dfs_path + ".blk{}".format(row['blk_no'])
+            request = "reduce {}".format(blk_path)
+            data_node_sock.send(bytes(request, encoding='utf-8'))
+            response_msg = data_node_sock.recv(BUF_SIZE)
+            # Parse the local results
+            local_result = pd.read_csv(StringIO(str(response_msg, encoding='utf-8'))).iloc[0]
+            local_sums.append(local_result['local_sum'])
+            local_sum_squares.append(local_result['local_sum_square'])
+            local_counts.append(local_result['local_count'])
+
+            data_node_sock.close()
+
+        local_sums = np.asarray(local_sums)
+        local_sum_squares = np.asarray(local_sum_squares)
+        local_counts = np.asarray(local_counts)
+        total_count = np.sum(local_counts)
+        mean = np.sum(local_sums) / total_count
+        std = np.sum(local_sum_squares) / total_count - np.square(mean)
+        print('Mean: %f, Std: %f' % (mean, std))
 
 
 # 解析命令行参数并执行对于的命令
@@ -181,6 +221,12 @@ elif cmd == "-copyToLocal":
         print("Usage: python client.py -copyFromLocal <dfs_path> <local_path>")
 elif cmd == "-format":
     client.format()
+elif cmd == "-mapReduce":
+    if argc == 2:
+        dfs_path = argv[2]
+        client.rm(dfs_path)
+    else:
+        print("Usage: python client.py -mapReduce <dfs_path>")
 else:
     print("Undefined command: {}".format(cmd))
-    print("Usage: python client.py <-ls | -copyFromLocal | -copyToLocal | -rm | -format> other_arguments")
+    print("Usage: python client.py <-ls | -copyFromLocal | -copyToLocal | -rm | -format | -mapReduce> other_arguments")
