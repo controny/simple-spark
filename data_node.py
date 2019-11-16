@@ -3,6 +3,7 @@ import os
 import socket
 import pandas as pd
 import numpy as np
+import traceback
 
 from common import *
 from utils import *
@@ -47,7 +48,7 @@ class DataNode:
                         response = self.rm(dfs_path)
                     elif cmd == "format":  # 格式化DFS
                         response = self.format()
-                    elif cmd == "reduce":  # 格式化DFS
+                    elif cmd == "reduce":
                         dfs_path = request[1]
                         response = self.reduce(dfs_path)
                     else:
@@ -56,12 +57,14 @@ class DataNode:
                     sock_fd.send(bytes(response, encoding='utf-8'))
                 except KeyboardInterrupt:
                     break
+                except Exception:
+                    traceback.print_exc()
                 finally:
                     sock_fd.close()
         except KeyboardInterrupt:
             pass
-        except Exception as e:
-            print(e)
+        except Exception:
+            traceback.print_exc()
         finally:
             listen_fd.close()
     
@@ -77,6 +80,7 @@ class DataNode:
     def store(self, sock_fd, dfs_path):
         # 从Client获取块数据
         chunk_data = recvall(sock_fd)
+        print('receive data with size = %d' % len(chunk_data))
         # 本地路径
         local_path = data_node_dir + dfs_path
         # 若目录不存在则创建新目录
@@ -117,7 +121,7 @@ class DataNode:
                 'sum': local_sum,
                 'sum_square': local_sum_square,
                 'count': local_count
-            })
+            }, index=[0])
 
         return data_pd.to_csv(index=False)
 

@@ -2,6 +2,7 @@ from common import *
 import os
 
 cur_dir = os.getcwd()
+# TODO kill process by port using `lsof -i:[port]`
 # Use `tr -s " "` to squeezes the spaces of ps output together, refer to https://stackoverflow.com/a/15643939
 command_kill_pattern = 'kill $(ps -ef | grep "python3 %s" | grep -v grep | tr -s " " | cut -d " " -f 2)'
 

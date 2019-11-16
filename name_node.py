@@ -5,7 +5,7 @@ import socket
 
 import numpy as np
 import pandas as pd
-from collections import defaultdict
+import traceback
 
 from common import *
 from utils import *
@@ -56,9 +56,6 @@ class NameNode:
                         response = self.rm_fat_item(dfs_path)
                     elif cmd == "format":
                         response = self.format()
-                    elif cmd == "map_reduce_assign":
-                        dfs_path = request[1]
-                        response = self.map_reduce_assign(dfs_path)
                     else:  # 其他位置指令
                         response = "Undefined command: " + " ".join(request)
                     
@@ -66,14 +63,12 @@ class NameNode:
                     sock_fd.send(bytes(response, encoding='utf-8'))
                 except KeyboardInterrupt:  # 如果运行时按Ctrl+C则退出程序
                     break
-                except Exception as e:  # 如果出错则打印错误信息
-                    print(e)
+                except Exception:  # 如果出错则打印错误信息
+                    traceback.print_exc()
                 finally:
                     sock_fd.close()  # 释放连接
         except KeyboardInterrupt:  # 如果运行时按Ctrl+C则退出程序
             pass
-        except Exception as e:  # 如果出错则打印错误信息
-            print(e)
         finally:
             listen_fd.close()  # 释放连接
     
@@ -136,24 +131,6 @@ class NameNode:
         format_command = "rm -rf {}/*".format(name_node_dir)
         os.system(format_command)
         return "Format namenode successfully~"
-
-    def map_reduce_assign(self, dfs_path):
-        """Return assignment table to the client"""
-        data_pd = pd.DataFrame(columns=['blk_no', 'host_name'])
-        # Ensure that each bulk assigned to a host where it lies and load balance
-        # Simply assume that all hosts are idle
-        fat_pd = self.get_fat_item(dfs_path)
-        num_bulk = fat_pd.shape[0]
-        # Record the number of bulks assigned to each host and set an upper limit
-        num_bulk_dict = defaultdict(lambda : 0)
-        max_num_bulk_per_host = math.ceil(1.0 * num_bulk / len(host_list))
-        for idx, row in fat_pd.iterrows():
-            host = None
-            while host is None or num_bulk_dict[host] >= max_num_bulk_per_host:
-                host = np.random.choice(parse_host_names(row['host_names']), size=1)[0]
-            data_pd.append([row['blk_no'], host])
-
-        return data_pd.to_csv(index=False)
 
 
 # 创建NameNode并启动

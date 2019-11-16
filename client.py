@@ -6,6 +6,8 @@ import time
 from io import StringIO
 
 import pandas as pd
+from collections import defaultdict
+import math
 
 from common import *
 from utils import *
@@ -127,7 +129,7 @@ class Client:
                 request = "rm {}".format(blk_path)
                 data_node_sock.send(bytes(request, encoding='utf-8'))
                 response_msg = recvall(data_node_sock)
-                print(response_msg)
+                print(str(response_msg, encoding='utf-8'))
 
                 data_node_sock.close()
     
@@ -149,20 +151,23 @@ class Client:
 
     def mapReduce(self, dfs_path):
         # TODO Split by line instead of original bulk
-        request = "map_reduce_assign {}".format(dfs_path)
+        request = "get_fat_item {}".format(dfs_path)
         print("Request: {}".format(request))
 
-        # Get assignment table from Name Node
         self.name_node_sock.send(bytes(request, encoding='utf-8'))
-        assign_pd = recvall(self.name_node_sock)
-        assign_pd = str(assign_pd, encoding='utf-8')
-        print("Assign: \n{}".format(assign_pd))
-        assign_table = pd.read_csv(StringIO(assign_pd))
+        fat_pd = recvall(self.name_node_sock)
+        fat_pd = str(fat_pd, encoding='utf-8')
+        print("Fat: \n{}".format(fat_pd))
+        fat_pd = pd.read_csv(StringIO(fat_pd))
+
+        # Get assignment table
+        assign_table = self.map_reduce_assign(fat_pd)
+        print("Assign: \n{}".format(assign_table))
 
         local_sums = []
         local_sum_squares = []
         local_counts = []
-        for idx, row in assign_table.iterrows():
+        for row in assign_table:
             # Let each data node perform reducing operation
             data_node_sock = socket.socket()
             data_node_sock.connect((row['host_name'], data_node_port))
@@ -173,9 +178,9 @@ class Client:
             response_msg = recvall(data_node_sock)
             # Parse the local results
             local_result = pd.read_csv(StringIO(str(response_msg, encoding='utf-8'))).iloc[0]
-            local_sums.append(local_result['local_sum'])
-            local_sum_squares.append(local_result['local_sum_square'])
-            local_counts.append(local_result['local_count'])
+            local_sums.append(local_result['sum'])
+            local_sum_squares.append(local_result['sum_square'])
+            local_counts.append(local_result['count'])
 
             data_node_sock.close()
 
@@ -186,6 +191,39 @@ class Client:
         mean = np.sum(local_sums) / total_count
         std = np.sum(local_sum_squares) / total_count - np.square(mean)
         print('Mean: %f, Std: %f' % (mean, std))
+
+    def mapReduceTest(self, local_path):
+        """Compute mean and std locally to test the validity of MapReduce"""
+        numbers = []
+        with open(local_path) as f:
+            for line in f.readlines():
+                # Skip the first column and parse the others as float
+                numbers.extend([float(x) for x in line.strip().split(' ')[1:]])
+        numbers = np.asarray(numbers)
+        mean = float(np.mean(numbers))
+        std = float(np.std(numbers))
+        print('[Locally] Mean: %f, Std: %f' % (mean, std))
+
+    @staticmethod
+    def map_reduce_assign(fat_pd):
+        """Return assignment table"""
+        assign_table = []
+        # Ensure that each bulk assigned to a host where it lies and load balance
+        # Simply assume that all hosts are idle
+        num_bulk = fat_pd.shape[0]
+        # Record the number of bulks assigned to each host and set an upper limit
+        num_bulk_dict = defaultdict(lambda: 0)
+        max_num_bulk_per_host = math.ceil(1.0 * num_bulk / len(host_list))
+        for idx, row in fat_pd.iterrows():
+            host = None
+            while host is None or num_bulk_dict[host] >= max_num_bulk_per_host:
+                host = np.random.choice(parse_host_names(row['host_names']), size=1)[0]
+            assign_table.append({
+                'blk_no': row['blk_no'],
+                'host_name': host
+            })
+
+        return assign_table
 
 
 # 解析命令行参数并执行对于的命令
@@ -228,9 +266,15 @@ elif cmd == "-format":
 elif cmd == "-mapReduce":
     if argc == 2:
         dfs_path = argv[2]
-        client.rm(dfs_path)
+        client.mapReduce(dfs_path)
     else:
         print("Usage: python client.py -mapReduce <dfs_path>")
+elif cmd == "-mapReduceTest":
+    if argc == 2:
+        local_path = argv[2]
+        client.mapReduceTest(local_path)
+    else:
+        print("Usage: python client.py -mapReduce <local_path>")
 else:
     print("Undefined command: {}".format(cmd))
-    print("Usage: python client.py <-ls | -copyFromLocal | -copyToLocal | -rm | -format | -mapReduce> other_arguments")
+    print("Usage: python client.py <-ls | -copyFromLocal | -copyToLocal | -rm | -format | -mapReduce | -mapReduceTest> other_arguments")
