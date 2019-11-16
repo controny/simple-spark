@@ -31,7 +31,7 @@ class DataNode:
                 
                 try:
                     # 获取请求方发送的指令
-                    request = str(recvall(sock_fd), encoding='utf-8')
+                    request = str(recv_msg(sock_fd), encoding='utf-8')
                     request = request.split()  # 指令之间使用空白符分割
                     print(request)
                     
@@ -54,7 +54,7 @@ class DataNode:
                     else:
                         response = "Undefined command: " + " ".join(request)
                     
-                    sock_fd.send(bytes(response, encoding='utf-8'))
+                    send_msg(sock_fd, bytes(response, encoding='utf-8'))
                 except KeyboardInterrupt:
                     break
                 except Exception:
@@ -79,7 +79,7 @@ class DataNode:
     
     def store(self, sock_fd, dfs_path):
         # 从Client获取块数据
-        chunk_data = recvall(sock_fd)
+        chunk_data = recv_msg(sock_fd)
         print('receive data with size = %d' % len(chunk_data))
         # 本地路径
         local_path = data_node_dir + dfs_path

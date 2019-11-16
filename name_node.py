@@ -35,7 +35,7 @@ class NameNode:
                 
                 try:
                     # 获取请求方发送的指令
-                    request = str(sock_fd.recv(128), encoding='utf-8')
+                    request = str(recv_msg(sock_fd), encoding='utf-8')
                     request = request.split()  # 指令之间使用空白符分割
                     print("Request: {}".format(request))
                     
@@ -60,7 +60,7 @@ class NameNode:
                         response = "Undefined command: " + " ".join(request)
                     
                     print("Response: {}".format(response))
-                    sock_fd.send(bytes(response, encoding='utf-8'))
+                    send_msg(sock_fd, bytes(response, encoding='utf-8'))
                 except KeyboardInterrupt:  # 如果运行时按Ctrl+C则退出程序
                     break
                 except Exception:  # 如果出错则打印错误信息
