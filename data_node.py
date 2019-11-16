@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from common import *
+from utils import *
 
 
 # DataNode支持的指令有:
@@ -29,7 +30,7 @@ class DataNode:
                 
                 try:
                     # 获取请求方发送的指令
-                    request = str(sock_fd.recv(BUF_SIZE), encoding='utf-8')
+                    request = str(recvall(sock_fd), encoding='utf-8')
                     request = request.split()  # 指令之间使用空白符分割
                     print(request)
                     
@@ -75,7 +76,7 @@ class DataNode:
     
     def store(self, sock_fd, dfs_path):
         # 从Client获取块数据
-        chunk_data = sock_fd.recv(BUF_SIZE)
+        chunk_data = recvall(sock_fd)
         # 本地路径
         local_path = data_node_dir + dfs_path
         # 若目录不存在则创建新目录

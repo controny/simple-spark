@@ -24,7 +24,7 @@ class Client:
         try:
             cmd = "ls {}".format(dfs_path)
             self.name_node_sock.send(bytes(cmd, encoding='utf-8'))
-            response_msg = self.name_node_sock.recv(BUF_SIZE)
+            response_msg = recvall(self.name_node_sock)
             print(str(response_msg, encoding='utf-8'))
         except Exception as e:
             print(e)
@@ -44,7 +44,7 @@ class Client:
         
         # 从NameNode获取一张FAT表
         self.name_node_sock.send(bytes(request, encoding='utf-8'))
-        fat_pd = self.name_node_sock.recv(BUF_SIZE)
+        fat_pd = recvall(self.name_node_sock)
         
         # 打印FAT表，并使用pandas读取
         fat_pd = str(fat_pd, encoding='utf-8')
@@ -72,10 +72,14 @@ class Client:
     def copyToLocal(self, dfs_path, local_path):
         request = "get_fat_item {}".format(dfs_path)
         print("Request: {}".format(request))
-        
+
+        # In case that the local_path is a directory path
+        if os.path.basename(local_path) == '':
+            local_path = os.path.join(local_path, os.path.basename(dfs_path))
+
         # 从NameNode获取一张FAT表
         self.name_node_sock.send(bytes(request, encoding='utf-8'))
-        fat_pd = self.name_node_sock.recv(BUF_SIZE)
+        fat_pd = recvall(self.name_node_sock)
         
         # 打印FAT表，并使用pandas读取
         fat_pd = str(fat_pd, encoding='utf-8')
@@ -94,7 +98,7 @@ class Client:
             request = "load {}".format(blk_path)
             data_node_sock.send(bytes(request, encoding='utf-8'))
             time.sleep(0.2)  # 两次传输需要间隔一段时间，避免粘包
-            data = data_node_sock.recv(BUF_SIZE)
+            data = recvall(data_node_sock)
             data = str(data, encoding='utf-8')
             fp.write(data)
             data_node_sock.close()
@@ -106,7 +110,7 @@ class Client:
         
         # 从NameNode获取改文件的FAT表，获取后删除
         self.name_node_sock.send(bytes(request, encoding='utf-8'))
-        fat_pd = self.name_node_sock.recv(BUF_SIZE)
+        fat_pd = recvall(self.name_node_sock)
         
         # 打印FAT表，并使用pandas读取
         fat_pd = str(fat_pd, encoding='utf-8')
@@ -122,7 +126,7 @@ class Client:
 
                 request = "rm {}".format(blk_path)
                 data_node_sock.send(bytes(request, encoding='utf-8'))
-                response_msg = data_node_sock.recv(BUF_SIZE)
+                response_msg = recvall(data_node_sock)
                 print(response_msg)
 
                 data_node_sock.close()
@@ -132,14 +136,14 @@ class Client:
         print(request)
         
         self.name_node_sock.send(bytes(request, encoding='utf-8'))
-        print(str(self.name_node_sock.recv(BUF_SIZE), encoding='utf-8'))
+        print(str(recvall(self.name_node_sock), encoding='utf-8'))
         
         for host in host_list:
             data_node_sock = socket.socket()
             data_node_sock.connect((host, data_node_port))
             
             data_node_sock.send(bytes("format", encoding='utf-8'))
-            print(str(data_node_sock.recv(BUF_SIZE), encoding='utf-8'))
+            print(str(recvall(data_node_sock), encoding='utf-8'))
             
             data_node_sock.close()
 
@@ -150,7 +154,7 @@ class Client:
 
         # Get assignment table from Name Node
         self.name_node_sock.send(bytes(request, encoding='utf-8'))
-        assign_pd = self.name_node_sock.recv(BUF_SIZE)
+        assign_pd = recvall(self.name_node_sock)
         assign_pd = str(assign_pd, encoding='utf-8')
         print("Assign: \n{}".format(assign_pd))
         assign_table = pd.read_csv(StringIO(assign_pd))
@@ -166,7 +170,7 @@ class Client:
             blk_path = dfs_path + ".blk{}".format(row['blk_no'])
             request = "reduce {}".format(blk_path)
             data_node_sock.send(bytes(request, encoding='utf-8'))
-            response_msg = data_node_sock.recv(BUF_SIZE)
+            response_msg = recvall(data_node_sock)
             # Parse the local results
             local_result = pd.read_csv(StringIO(str(response_msg, encoding='utf-8'))).iloc[0]
             local_sums.append(local_result['local_sum'])
