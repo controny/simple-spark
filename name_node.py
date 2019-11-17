@@ -100,11 +100,10 @@ class NameNode:
     
     def new_fat_item(self, dfs_path, num_blk):
         data_pd = pd.DataFrame(columns=['blk_no', 'host_names'])
-        
+
         for i in range(num_blk):
             blk_no = i
             num_replication = min(dfs_replication, len(host_list))  # in case that the number of hosts is less
-            # TODO Assign bulks uniformly to ensure load balance
             host_names = np.random.choice(host_list, size=num_replication, replace=False)
             host_names_str = ','.join(host_names)
             print('host name', host_names_str)

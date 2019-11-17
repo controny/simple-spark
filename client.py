@@ -8,6 +8,7 @@ from io import StringIO
 import pandas as pd
 from collections import defaultdict
 import math
+from tqdm import tqdm
 
 from common import *
 from utils import *
@@ -43,8 +44,8 @@ class Client:
 
         # Split the file by line and get size for each bulk in advance
         bulk_sizes = self.split_file_by_line(local_path)
-        num_bulk = len(bulk_sizes)
-        request = "new_fat_item {} {}".format(dfs_path, num_bulk)
+        num_blk = len(bulk_sizes)
+        request = "new_fat_item {} {}".format(dfs_path, num_blk)
         print("Request: {}".format(request))
 
         # 从NameNode获取一张FAT表
@@ -54,27 +55,31 @@ class Client:
         # 打印FAT表，并使用pandas读取
         fat_pd = str(fat_pd, encoding='utf-8')
         print("Fat: \n{}".format(fat_pd))
-        print('Bulk sizes: ', bulk_sizes)
         fat = pd.read_csv(StringIO(fat_pd))
         
         # 根据FAT表逐个向目标DataNode发送数据块
-        fp = open(local_path)
-        for idx, row in fat.iterrows():
+        print('Sending data to Data Nodes')
+        host_load = defaultdict(lambda: 0)
+        # Open in binary mode to avoid a strange bug about file position
+        fp = open(local_path, 'rb')
+        for idx, row in tqdm(fat.iterrows()):
             data = fp.read(bulk_sizes[idx])
             
             for host_name in parse_host_names(row['host_names']):
                 data_node_sock = socket.socket()
-                print('connecting', host_name)
                 data_node_sock.connect((host_name, data_node_port))
                 blk_path = dfs_path + ".blk{}".format(row['blk_no'])
 
                 request = "store {}".format(blk_path)
                 send_msg(data_node_sock, bytes(request, encoding='utf-8'))
                 time.sleep(0.2)  # 两次传输需要间隔一段时间，避免粘包
-                send_msg(data_node_sock, bytes(data, encoding='utf-8'))
+                # send_msg(data_node_sock, bytes(data, encoding='utf-8'))
+                send_msg(data_node_sock, data)
                 data_node_sock.close()
+                host_load[host_name] += 1
         fp.close()
-    
+        print('Host load:\n' + '\n'.join(['%s: %d' % (k, v) for k, v in host_load.items()]))
+
     def copyToLocal(self, dfs_path, local_path):
         request = "get_fat_item {}".format(dfs_path)
         print("Request: {}".format(request))
@@ -165,12 +170,12 @@ class Client:
 
         # Get assignment table
         assign_table = self.map_reduce_assign(fat_pd)
-        print("Assign: \n{}".format(assign_table))
 
         local_sums = []
         local_sum_squares = []
         local_counts = []
-        for row in assign_table:
+        print('Mapping data to Data Nodes')
+        for row in tqdm(assign_table):
             # Let each data node perform reducing operation
             data_node_sock = socket.socket()
             data_node_sock.connect((row['host_name'], data_node_port))
@@ -211,14 +216,15 @@ class Client:
     def split_file_by_line(local_path):
         """Split file by line and return a list of bulk sizes"""
         bulk_sizes = []
-        with open(local_path, 'r') as f:
+        # Open in binary mode to avoid a strange bug about file position
+        with open(local_path, 'rb') as f:
             eof = False
             while not eof:
                 begin_pos = f.tell()
                 last_pos = 0
                 while f.tell() - begin_pos <= dfs_blk_size:
                     last_pos = f.tell()
-                    if f.readline() == '':
+                    if f.readline() == b'':
                         eof = True
                         break
                 if not eof:
@@ -237,20 +243,16 @@ class Client:
     def map_reduce_assign(fat_pd):
         """Return assignment table"""
         assign_table = []
-        # Ensure that each bulk assigned to a host where it lies and load balance
-        # Simply assume that all hosts are idle
-        num_bulk = fat_pd.shape[0]
-        # Record the number of bulks assigned to each host and set an upper limit
-        num_bulk_dict = defaultdict(lambda: 0)
-        max_num_bulk_per_host = math.ceil(1.0 * num_bulk / len(host_list))
+        host_load = defaultdict(lambda: 0)
         for idx, row in fat_pd.iterrows():
-            host = None
-            while host is None or num_bulk_dict[host] >= max_num_bulk_per_host:
-                host = np.random.choice(parse_host_names(row['host_names']), size=1)[0]
+            host = np.random.choice(parse_host_names(row['host_names']), size=1)[0]
+            host_load[host] += 1
             assign_table.append({
                 'blk_no': row['blk_no'],
                 'host_name': host
             })
+
+        print('Host load: \n', '\n'.join(['%s: %d' % (k, v) for k, v in host_load.items()]))
 
         return assign_table
 

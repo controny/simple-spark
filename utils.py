@@ -1,5 +1,6 @@
 from common import *
 import struct
+import time
 
 
 def parse_host_names(host_names):
@@ -18,6 +19,12 @@ def send_msg(sock, data):
 def recv_msg(sock):
     # Parse the header, which is a 4-byte int
     header = sock.recv(4)
+    num_try = 5
+    while len(header) == 0 and num_try:
+        print('Fail to receive data. Trying again...')
+        time.sleep(0.1)
+        header = sock.recv(4)
+        num_try -= 1
     data = bytearray()
     if len(header) != 0:
         data_size = struct.unpack('>i', header)[0]
