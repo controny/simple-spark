@@ -49,8 +49,8 @@ class NameNode:
                         response = self.get_fat_item(dfs_path)
                     elif cmd == "new_fat_item":  # 指令类型为新建FAT表项
                         dfs_path = request[1]  # 指令第二个参数为DFS目标地址
-                        file_size = int(request[2])
-                        response = self.new_fat_item(dfs_path, file_size)
+                        num_blk = int(request[2])
+                        response = self.new_fat_item(dfs_path, num_blk)
                     elif cmd == "rm_fat_item":  # 指令类型为删除FAT表项
                         dfs_path = request[1]  # 指令第二个参数为DFS目标地址
                         response = self.rm_fat_item(dfs_path)
@@ -98,21 +98,17 @@ class NameNode:
         response = pd.read_csv(local_path)
         return response.to_csv(index=False)
     
-    def new_fat_item(self, dfs_path, file_size):
-        nb_blks = int(math.ceil(file_size / dfs_blk_size))
-        print(file_size, nb_blks)
+    def new_fat_item(self, dfs_path, num_blk):
+        data_pd = pd.DataFrame(columns=['blk_no', 'host_names'])
         
-        data_pd = pd.DataFrame(columns=['blk_no', 'host_names', 'blk_size'])
-        
-        for i in range(nb_blks):
+        for i in range(num_blk):
             blk_no = i
             num_replication = min(dfs_replication, len(host_list))  # in case that the number of hosts is less
             # TODO Assign bulks uniformly to ensure load balance
             host_names = np.random.choice(host_list, size=num_replication, replace=False)
             host_names_str = ','.join(host_names)
             print('host name', host_names_str)
-            blk_size = min(dfs_blk_size, file_size - i * dfs_blk_size)
-            data_pd.loc[i] = [blk_no, host_names_str, blk_size]
+            data_pd.loc[i] = [blk_no, host_names_str]
         
         # 获取本地路径
         local_path = name_node_dir + dfs_path

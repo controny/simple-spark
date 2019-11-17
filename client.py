@@ -41,9 +41,12 @@ class Client:
         if os.path.basename(dfs_path) == '':
             dfs_path = os.path.join(dfs_path, os.path.basename(local_path))
 
-        request = "new_fat_item {} {}".format(dfs_path, file_size)
+        # Split the file by line and get size for each bulk in advance
+        bulk_sizes = self.split_file_by_line(local_path)
+        num_bulk = len(bulk_sizes)
+        request = "new_fat_item {} {}".format(dfs_path, num_bulk)
         print("Request: {}".format(request))
-        
+
         # 从NameNode获取一张FAT表
         send_msg(self.name_node_sock, bytes(request, encoding='utf-8'))
         fat_pd = recv_msg(self.name_node_sock)
@@ -51,12 +54,13 @@ class Client:
         # 打印FAT表，并使用pandas读取
         fat_pd = str(fat_pd, encoding='utf-8')
         print("Fat: \n{}".format(fat_pd))
+        print('Bulk sizes: ', bulk_sizes)
         fat = pd.read_csv(StringIO(fat_pd))
         
         # 根据FAT表逐个向目标DataNode发送数据块
         fp = open(local_path)
         for idx, row in fat.iterrows():
-            data = fp.read(int(row['blk_size']))
+            data = fp.read(bulk_sizes[idx])
             
             for host_name in parse_host_names(row['host_names']):
                 data_node_sock = socket.socket()
@@ -150,7 +154,6 @@ class Client:
             data_node_sock.close()
 
     def mapReduce(self, dfs_path):
-        # TODO Split by line instead of original bulk
         request = "get_fat_item {}".format(dfs_path)
         print("Request: {}".format(request))
 
@@ -203,6 +206,32 @@ class Client:
         mean = float(np.mean(numbers))
         variance = float(np.var(numbers))
         print('Mean: %f, Var: %f' % (mean, variance))
+
+    @staticmethod
+    def split_file_by_line(local_path):
+        """Split file by line and return a list of bulk sizes"""
+        bulk_sizes = []
+        with open(local_path, 'r') as f:
+            eof = False
+            while not eof:
+                begin_pos = f.tell()
+                last_pos = 0
+                while f.tell() - begin_pos <= dfs_blk_size:
+                    last_pos = f.tell()
+                    if f.readline() == '':
+                        eof = True
+                        break
+                if not eof:
+                    # Return to the last position
+                    f.seek(last_pos)
+                bulk_size = f.tell() - begin_pos
+                bulk_sizes.append(bulk_size)
+
+            # Check all bulk sizes sum up to the original file size
+            assert sum(bulk_sizes) == os.stat(f.fileno()).st_size
+
+        return bulk_sizes
+
 
     @staticmethod
     def map_reduce_assign(fat_pd):
