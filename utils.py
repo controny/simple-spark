@@ -17,9 +17,11 @@ def send_msg(sock, data):
 
 def recv_msg(sock):
     # Parse the header, which is a 4-byte int
-    data_size = struct.unpack('>i', sock.recv(4))[0]
+    header = sock.recv(4)
     data = bytearray()
-    while len(data) < data_size:
-        part = sock.recv(BUF_SIZE)
-        data.extend(part)
+    if len(header) != 0:
+        data_size = struct.unpack('>i', header)[0]
+        while len(data) < data_size:
+            part = sock.recv(BUF_SIZE)
+            data.extend(part)
     return data

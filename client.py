@@ -189,11 +189,11 @@ class Client:
         local_counts = np.asarray(local_counts)
         total_count = np.sum(local_counts)
         mean = np.sum(local_sums) / total_count
-        std = np.sum(local_sum_squares) / total_count - np.square(mean)
-        print('Mean: %f, Std: %f' % (mean, std))
+        variance = np.sum(local_sum_squares) / total_count - np.square(mean)
+        print('Mean: %f, Var: %f' % (mean, variance))
 
     def mapReduceTest(self, local_path):
-        """Compute mean and std locally to test the validity of MapReduce"""
+        """Compute mean and var locally to test the validity of MapReduce"""
         numbers = []
         with open(local_path) as f:
             for line in f.readlines():
@@ -201,8 +201,8 @@ class Client:
                 numbers.extend([float(x) for x in line.strip().split(' ')[1:]])
         numbers = np.asarray(numbers)
         mean = float(np.mean(numbers))
-        std = float(np.std(numbers))
-        print('[Locally] Mean: %f, Std: %f' % (mean, std))
+        variance = float(np.var(numbers))
+        print('Mean: %f, Var: %f' % (mean, variance))
 
     @staticmethod
     def map_reduce_assign(fat_pd):
@@ -277,4 +277,3 @@ elif cmd == "-mapReduceTest":
         print("Usage: python client.py -mapReduce <local_path>")
 else:
     print("Undefined command: {}".format(cmd))
-    print("Usage: python client.py <-ls | -copyFromLocal | -copyToLocal | -rm | -format | -mapReduce | -mapReduceTest> other_arguments")

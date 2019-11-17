@@ -63,6 +63,9 @@ class NameNode:
                     send_msg(sock_fd, bytes(response, encoding='utf-8'))
                 except KeyboardInterrupt:  # 如果运行时按Ctrl+C则退出程序
                     break
+                except IndexError:
+                    # Ignore empty request
+                    pass
                 except Exception:  # 如果出错则打印错误信息
                     traceback.print_exc()
                 finally:
