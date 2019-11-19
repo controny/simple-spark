@@ -51,6 +51,8 @@ class DataNode:
                     elif cmd == "reduce":
                         dfs_path = request[1]
                         response = self.reduce(dfs_path)
+                    elif cmd == "ping":
+                        response = self.ping()
                     else:
                         response = "Undefined command: " + " ".join(request)
                     
@@ -125,6 +127,8 @@ class DataNode:
 
         return data_pd.to_csv(index=False)
 
+    def ping(self):
+        return '200'
 
 # 创建DataNode对象并启动
 data_node = DataNode()

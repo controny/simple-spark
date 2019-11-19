@@ -96,6 +96,13 @@ class NameNode:
         # 获取FAT表内容
         local_path = name_node_dir + dfs_path
         response = pd.read_csv(local_path)
+        died_hosts = self.get_died_hosts()
+        if len(died_hosts) != 0:
+            print('Died hosts: %s' % died_hosts)
+            # Delete those died hosts in the FAT to be returned
+            for idx, row in response.iterrows():
+                for host in died_hosts:
+                    response.loc[idx, 'host_names'] = row['host_names'].replace(host, '').replace(',,', ',').strip(',')
         return response.to_csv(index=False)
     
     def new_fat_item(self, dfs_path, num_blk):
@@ -129,6 +136,24 @@ class NameNode:
         format_command = "rm -rf {}/*".format(name_node_dir)
         os.system(format_command)
         return "Format namenode successfully~"
+
+    def get_died_hosts(self):
+        """Return a list of died hosts"""
+        results = []
+        for host in host_list:
+            sock = socket.socket()
+            try:
+                sock.connect((host, data_node_port))
+                cmd = "ping"
+                send_msg(sock, bytes(cmd, encoding='utf-8'))
+                response_msg = recv_msg(sock)
+                if str(response_msg, encoding='utf-8') != '200':
+                    raise ValueError
+            except:
+                results.append(host)
+            finally:
+                sock.close()
+        return results
 
 
 # 创建NameNode并启动

@@ -5,7 +5,7 @@ cur_dir = os.getcwd()
 
 # start current node as name node
 command_start = 'python3 %s/name_node.py &' % cur_dir
-print('command to start name node: ', command_start)
+print('command to start name node: %s' % command_start)
 os.system(command_start)
 
 for slave in host_list:

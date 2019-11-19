@@ -252,7 +252,7 @@ class Client:
                 'host_name': host
             })
 
-        print('Host load: \n', '\n'.join(['%s: %d' % (k, v) for k, v in host_load.items()]))
+        print('Host load: \n' + '\n'.join(['%s: %d' % (k, v) for k, v in host_load.items()]))
 
         return assign_table
 
