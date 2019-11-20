@@ -159,6 +159,7 @@ class Client:
             data_node_sock.close()
 
     def mapReduce(self, dfs_path):
+        start_time = time.time()
         request = "get_fat_item {}".format(dfs_path)
         print("Request: {}".format(request))
 
@@ -174,6 +175,7 @@ class Client:
         local_sums = []
         local_sum_squares = []
         local_counts = []
+        data_node_socks = []
         print('Mapping data to Data Nodes')
         for row in tqdm(assign_table):
             # Let each data node perform reducing operation
@@ -183,14 +185,24 @@ class Client:
             blk_path = dfs_path + ".blk{}".format(row['blk_no'])
             request = "reduce {}".format(blk_path)
             send_msg(data_node_sock, bytes(request, encoding='utf-8'))
-            response_msg = recv_msg(data_node_sock)
-            # Parse the local results
-            local_result = pd.read_csv(StringIO(str(response_msg, encoding='utf-8'))).iloc[0]
-            local_sums.append(local_result['sum'])
-            local_sum_squares.append(local_result['sum_square'])
-            local_counts.append(local_result['count'])
+            data_node_socks.append(data_node_sock)
 
-            data_node_sock.close()
+        # Try to receive message asynchronously
+        while len(data_node_socks) != 0:
+            for data_node_sock in data_node_socks[:]:
+                response_msg = recv_msg(data_node_sock)
+                if len(response_msg) == 0:
+                    # If not receive any data, continue and try later
+                    continue
+                # Parse the local results
+                local_result = pd.read_csv(StringIO(str(response_msg, encoding='utf-8'))).iloc[0]
+                local_sums.append(local_result['sum'])
+                local_sum_squares.append(local_result['sum_square'])
+                local_counts.append(local_result['count'])
+
+                data_node_sock.close()
+                # The socket is finished, so we can remove it
+                data_node_socks.remove(data_node_sock)
 
         local_sums = np.asarray(local_sums)
         local_sum_squares = np.asarray(local_sum_squares)
@@ -198,10 +210,12 @@ class Client:
         total_count = np.sum(local_counts)
         mean = np.sum(local_sums) / total_count
         variance = np.sum(local_sum_squares) / total_count - np.square(mean)
-        print('Mean: %f, Var: %f' % (mean, variance))
+        end_time = time.time()
+        print('Mean: %f, Var: %f, Time: %f s' % (mean, variance, end_time-start_time))
 
     def mapReduceTest(self, local_path):
         """Compute mean and var locally to test the validity of MapReduce"""
+        start_time = time.time()
         numbers = []
         with open(local_path) as f:
             for line in f.readlines():
@@ -210,7 +224,8 @@ class Client:
         numbers = np.asarray(numbers)
         mean = float(np.mean(numbers))
         variance = float(np.var(numbers))
-        print('Mean: %f, Var: %f' % (mean, variance))
+        end_time = time.time()
+        print('Mean: %f, Var: %f, Time: %f s' % (mean, variance, end_time-start_time))
 
     @staticmethod
     def split_file_by_line(local_path):
