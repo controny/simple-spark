@@ -52,5 +52,5 @@ git push
 1. 各种Operation的实现。
 
 余然：
-1. 构思demo应用，提出其他的操作需求。
-1. pyMPI重构异步通信？主要用到scatter和gather操作。
+1. 构思demo应用，利用spark的接口来实现。
+1. 用`mpi4py`重构消息通信，实现高效的非阻塞并行通信，教程可参考<https://zhuanlan.zhihu.com/p/25332041>。
