@@ -14,7 +14,7 @@ from common import *
 from utils import *
 
 
-class Client:
+class DFSClient:
     def __init__(self):
         self.name_node_sock = socket.socket()
         self.name_node_sock.connect((name_node_host, name_node_port))
@@ -278,7 +278,7 @@ import sys
 argv = sys.argv
 argc = len(argv) - 1
 
-client = Client()
+client = DFSClient()
 
 cmd = argv[1]
 if cmd == '-ls':

@@ -1,47 +1,22 @@
 # simple-spark
 
-### 一、系统架构
+## 一、系统架构
 
-#### 1.1. 介绍
+该项目基于简单的分布式文件系统实现spark框架，整体的类图为
 
-该项目基于简单的分布式文件系统实现spark框架，大致架构为
-![20191204213256.png](https://raw.githubusercontent.com/controny/PicBed/master/images/20191204213256.png)
+![20191207102228.png](https://raw.githubusercontent.com/controny/PicBed/master/images/20191207102228.png)
 
-#### 1.2. 目录结构（待更新）
-- simple-spark : 根目录
-    - dfs : DFS文件夹，用于存放DFS数据
-        - name : 存放NameNode数据
-        - data : 存放DataNode数据
-    - common.py  : 全局变量
-    - name_node.py : NameNode程序
-    - data_node.py : DataNode程序
-    - client.py : Client程序，用于用户与DFS交互
+- **DFSClient**：DFS的客户端，仅进行分布式文件系统的读写操作。
+- **NameNode**：统筹数据的读写。
+- **DataNode**：进行实际的数据读写。
+- **Manager**：继承NameNode，统筹计算任务的分配。
+- **Worker**：继承DataNode，进行实际的计算。
+- **Lineage**：维护RDD计算图的信息。当新来的RDD操作为Action类型时，进行回溯并做对应的一连串计算。
+- **RDD**：记录RDD的相关信息，如操作、子节点、id等。其中还需要定义textFile、cache、flatMap等方法，作为提供给用户的接口，创建新的Operation。
+- **Operation**：抽象类，其子类应包括TextFileOp、CacheOp、FlatMapOp等实际操作类。类中要定义统一的接口（如`__call__`）以供Lineage调用，进行实际的计算。
+- **SparkContext**：spark的上下文。继承RDD，作为Lineage的root，是一种特殊的RDD。
 
-#### 1.3. 模块功能（待更新）
-
-- name_node.py
-    - 保存文件的块存放位置信息
-    - 获取文件/目录信息
-    - get_fat_item： 获取文件的FAT表项
-    - new_fat_item： 根据文件大小创建FAT表项
-    - rm_fat_item： 删除一个FAT表项
-    - format: 删除所有FAT表项
-
-- data_node.py
-    - load 加载数据块
-    - store 保存数据块
-    - rm 删除数据块
-    - format 删除所有数据块
-
-- client.py
-    - ls : 查看当前目录文件/目录信息
-    - copyFromLocal : 从本地复制数据到DFS
-    - copyToLocal ： 从DFS复制数据到本地
-    - rm ： 删除DFS上的文件
-    - format ：格式化DFS
-
-### 二、安装及使用
-
+## 二、安装及使用
 ```shell
 # 下载仓库到本地
 git clone https://github.com/controny/simple-spark
@@ -54,7 +29,7 @@ python3 start_all.py
 python3 stop_all.py
 ```
 
-### 三、Git协作方式
+## 三、Git协作方式
 
 ```bash
 # 提交代码
@@ -65,3 +40,17 @@ git pull
 # 推送到远程仓库
 git push
 ```
+
+## 四、分工
+
+欧皇：
+1. RDD和Lineage的实现。
+1. 编写测试脚本。
+
+杨耿聪：
+1. 设计总框架，细化到类图的设计。
+1. 各种Operation的实现。
+
+余然：
+1. 构思demo应用，提出其他的操作需求。
+1. pyMPI重构异步通信？主要用到scatter和gather操作。
