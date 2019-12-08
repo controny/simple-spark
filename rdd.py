@@ -8,16 +8,20 @@ class RDD:
 # point to parent and child 
 # store operation
 # unique ID
-    def __init__(self,child,parent=None):
-        self.parent = parent 
-        self.child = child
+    def __init__(self,parent=None,operation=None):
+        self.parent = parent
+        self.operation = operation 
         self.ID = next(unique_sequence)
     def flatMap(self):
-        self.operation = "flatMap" 
+        child = RDD(parent=self,operation="flatMap")
+        self.child = child
     def Map(self):
-        self.operation = "Map" 
+        child = RDD(parent=self,operation="Map")
+        self.child = child
     def cache(self):
-        self.operation = "cache"
+        child = RDD(parent=self,operation="cache")
+        self.child = child
     def textFile(self):
-        self.operation = "textFile"
+        child = RDD(parent=self,operation="textFile")
+        self.child = child
     
