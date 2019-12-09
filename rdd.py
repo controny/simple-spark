@@ -13,28 +13,37 @@ class RDD:
 # type() is Action?
 # execute from the head to now
 # operation collect and take  
-    def __init__(self,parent=None,operation=None):
+    def __init__(self,parent=None, operation=None):
         self.parent = parent
         self.operation = operation 
         self.childs = []
         self.ID = next(unique_sequence)
+
     def flatMap(self, func):
         child = RDD(parent=self, operation=FlatMapOp(func))
         self.childs.append(child)
+        if type(operation) = Action:
+            operation()
         return child
     
     def Map(self, func):
-        child = RDD(parent=self,operation=MapOp(func))
+        child = RDD(parent=self, operation=MapOp(func))
         self.childs.append(child)
+        if type(operation) = Action:
+            operation()
         return child
     
     def cache(self):
-        child = RDD(parent=self,operation="cache")
+        child = RDD(parent=self, operation="cache")
         self.childs.append(child)
+        if type(operation) = Action:
+            operation()
         return child
     
-    def textFile(self, func):
-        child = RDD(parent=self,operation=TextFileOp(func))
+    def textFile(self, address):
+        child = RDD(parent=self, operation=TextFileOp(address))
         self.childs.append(child)
+        if type(operation) = Action:
+            operation()
         return child
     
