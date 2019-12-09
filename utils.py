@@ -8,6 +8,11 @@ def parse_host_names(host_names):
     return host_names.split(',')
 
 
+def dfs2local_path(dfs_path):
+    """Convert DFS path to local path"""
+    return data_node_dir + dfs_path
+
+
 # Use a header to indicate data size, refer to https://stackoverflow.com/a/27429611
 def send_msg(sock, data):
     # Pack the data size into an int with big-endian

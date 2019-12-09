@@ -4,18 +4,16 @@ import socket
 import pandas as pd
 import numpy as np
 import traceback
+import pickle
 
 from common import *
 from utils import *
 
 
-# DataNode支持的指令有:
-# 1. load 加载数据块
-# 2. store 保存数据块
-# 3. rm 删除数据块
-# 4. format 删除所有数据块
-
 class DataNode:
+    def __init__(self):
+        self.memory = {}
+
     def run(self):
         # 创建一个监听的socket
         listen_fd = socket.socket()
@@ -36,27 +34,20 @@ class DataNode:
                     print(request)
                     
                     cmd = request[0]  # 指令第一个为指令类型
-                    
-                    if cmd == "load":  # 加载数据块
-                        dfs_path = request[1]  # 指令第二个参数为DFS目标地址
-                        response = self.load(dfs_path)
-                    elif cmd == "store":  # 存储数据块
-                        dfs_path = request[1]  # 指令第二个参数为DFS目标地址
-                        response = self.store(sock_fd, dfs_path)
-                    elif cmd == "rm":  # 删除数据块
-                        dfs_path = request[1]  # 指令第二个参数为DFS目标地址
-                        response = self.rm(dfs_path)
-                    elif cmd == "format":  # 格式化DFS
-                        response = self.format()
-                    elif cmd == "reduce":
-                        dfs_path = request[1]
-                        response = self.reduce(dfs_path)
-                    elif cmd == "ping":
-                        response = self.ping()
-                    else:
-                        response = "Undefined command: " + " ".join(request)
-                    
-                    send_msg(sock_fd, bytes(response, encoding='utf-8'))
+
+                    try:
+                        if cmd == 'store':
+                            # this command is kind of special
+                            response = self.store(sock_fd, request[1])
+                        else:
+                            response = getattr(self, cmd)(*request[1:])
+                    except Exception as e:
+                        response = e
+
+                    print('response:', response)
+                    if type(response) is not bytes:
+                        response = bytes(response, encoding='utf-8')
+                    send_msg(sock_fd, response)
                 except KeyboardInterrupt:
                     break
                 except Exception:
@@ -64,7 +55,7 @@ class DataNode:
                 finally:
                     sock_fd.close()
         except KeyboardInterrupt:
-            pass
+            listen_fd.close()
         except Exception:
             traceback.print_exc()
         finally:
@@ -72,7 +63,7 @@ class DataNode:
     
     def load(self, dfs_path):
         # 本地路径
-        local_path = data_node_dir + dfs_path
+        local_path = dfs2local_path(dfs_path)
         # 读取本地数据
         with open(local_path) as f:
             chunk_data = f.read(dfs_blk_size)
@@ -84,7 +75,7 @@ class DataNode:
         chunk_data = recv_msg(sock_fd)
         print('receive data with size = %d' % len(chunk_data))
         # 本地路径
-        local_path = data_node_dir + dfs_path
+        local_path = dfs2local_path(dfs_path)
         # 若目录不存在则创建新目录
         os.system("mkdir -p {}".format(os.path.dirname(local_path)))
         # 将数据块写入本地文件
@@ -94,7 +85,7 @@ class DataNode:
         return "Store chunk {} successfully~".format(local_path)
     
     def rm(self, dfs_path):
-        local_path = data_node_dir + dfs_path
+        local_path = dfs2local_path(dfs_path)
         rm_command = "rm -rf " + local_path
         os.system(rm_command)
         
@@ -106,9 +97,28 @@ class DataNode:
         
         return "Format datanode successfully~"
 
+    def text_file(self, dfs_base_path, blk_no):
+        """Load file into memory"""
+        dfs_path = '%s.blk%s' % (dfs_base_path, blk_no)
+        local_path = dfs2local_path(dfs_path)
+        with open(local_path) as f:
+            chunk_data = f.read(dfs_blk_size)
+            self.memory[blk_no] = chunk_data
+        return "Load text file successfully~"
+
+    def take(self, blk_no, num):
+        """Take lines from chunk data in memory"""
+        lines = self.memory[blk_no].split('\n')
+        num = int(num)
+        if num == -1:
+            # -1 means take all data
+            lines = lines[:num]
+        # TODO: clear memory after perform an action?
+        return pickle.dumps(lines)
+
     def reduce(self, dfs_path):
         """Compute Sum(X), Sum(X^2) and Count(X) locally"""
-        local_path = data_node_dir + dfs_path
+        local_path = dfs2local_path(dfs_path)
         numbers = []
         with open(local_path) as f:
             for line in f.readlines():
