@@ -15,14 +15,6 @@ class RDD:
         self.operation = operation 
         self.childs = []
         self.ID = next(unique_sequence)
-    def end(self):
-        #return ends list
-        #[A,B,C]
-        for child in self.childs:
-            if child is not None:
-                child.end()
-            else:
-                return child
     def flatMap(self):
         child = RDD(parent=self,operation="flatMap")
         self.childs.append(child)
