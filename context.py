@@ -16,3 +16,4 @@ class SparkContext:
                 end(child)
         else:
             leaf.append(RDD)
+        return leaf
