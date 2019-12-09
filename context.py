@@ -3,17 +3,19 @@
 from rdd import RDD
 from uniqueID import *
 
-class SparkContext:
+class SparkContext(RDD):
     # confusing with def
+    # print() messeage of action
     def __init__(self):
-        leaf = []
+        super(SparkContext,self).__init__()
+        self.leaf = []
 
-    def end(self,RDD):
+    def end(self):
         #return ends list
         #[A,B,C]
-        if RDD.childs:
-            for child in RDD.childs:
+        if self.childs:
+            for child in self.childs:
                 end(child)
         else:
-            leaf.append(RDD)
-        return leaf
+            self.leaf.append(self)
+        return self.leaf

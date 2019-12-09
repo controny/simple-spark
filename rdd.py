@@ -10,18 +10,21 @@ class RDD:
 # unique ID  ,Done
 # ---------Discussion-----------
 # should we store partitions?
+# type() is Action?
+# execute from the head to now
+# operation collect and take  
     def __init__(self,parent=None,operation=None):
         self.parent = parent
         self.operation = operation 
         self.childs = []
         self.ID = next(unique_sequence)
-    def flatMap(self):
-        child = RDD(parent=self,operation="flatMap")
+    def flatMap(self, func):
+        child = RDD(parent=self, operation=FlatMapOp(func))
         self.childs.append(child)
         return child
     
-    def Map(self):
-        child = RDD(parent=self,operation="Map")
+    def Map(self, func):
+        child = RDD(parent=self,operation=MapOp(func))
         self.childs.append(child)
         return child
     
@@ -30,8 +33,8 @@ class RDD:
         self.childs.append(child)
         return child
     
-    def textFile(self):
-        child = RDD(parent=self,operation="textFile")
+    def textFile(self, func):
+        child = RDD(parent=self,operation=TextFileOp(func))
         self.childs.append(child)
         return child
     
