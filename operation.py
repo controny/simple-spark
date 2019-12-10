@@ -31,6 +31,9 @@ class Transformation(Operation):
             worker_sock.close()
 
 class Action(Operation):
+    def __init__(self):
+        super(Action, self).__init__()
+        
     def take(self, partition_tbl, num):
         result = []
         # take lines from bulk 0
@@ -97,8 +100,12 @@ class MapOp(Transformation):
         self.map(partition_tbl)
 
 class TakeOp(Action):
-    def __call__(self, partition_tbl, num, *args, **kwargs):
-        return self.take(partition_tbl, num)
+    def __init__(self, num):
+        super(TakeOp, self).__init__()
+        self.num = num
+        
+    def __call__(self, partition_tbl, *args, **kwargs):
+        return self.take(partition_tbl, self.num)
 
 
 class CollectOp(Action):

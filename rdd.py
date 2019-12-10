@@ -23,32 +23,35 @@ class RDD:
         self.ID = next(unique_sequence)
         self.partition = None
 
-    def flatMap(self, func):
-        child = RDD(parent=self, operation=FlatMapOp(func))
-        self.childs.append(child)
-        if type(operation) == Action:
-            self.execute()
-        return child
+    # def flatMap(self, func):
+    #     child = RDD(parent=self, operation=FlatMapOp(func))
+    #     self.childs.append(child)
+    #     if type(operation) == Action:
+    #         self.execute()
+    #     return child
     
-    def Map(self, func):
+    def map(self, func):
         child = RDD(parent=self, operation=MapOp(func))
         self.childs.append(child)
-        if type(operation) == Action:
-            self.execute()
         return child
-    
-    def cache(self):
-        child = RDD(parent=self, operation="cache")
+        
+    def take(self, num):
+        operation=TakeOp(num)
+        child = RDD(parent=self, operation=operation)
         self.childs.append(child)
-        if type(operation) == Action:
-            self.execute()
-        return child
+        if isinstance(operation,Action):
+            value = child.execute()
+        return value    
+    # def cache(self):
+    #     child = RDD(parent=self, operation="cache")
+    #     self.childs.append(child)
+    #     if type(operation) == Action:
+    #         self.execute()
+    #     return child
     
     def textFile(self, address):
         child = RDD(parent=self, operation=TextFileOp(address))
         self.childs.append(child)
-        if type(operation) == Action:
-            self.execute()
         return child
 
     def execute(self):
@@ -56,20 +59,49 @@ class RDD:
         # 1. find the top and kepp the steps 
         # 2. using the steps to execute to now
         now = self
-        step = 1
+        step = 0
         execution_list = []
         # find the root 
-        while (now.parent):
+        while (not isinstance(now, SparkContext)):
             execution_list.append(now)
             now = now.parent
             step += 1
         # execute from root to now
         while(step):
             RDD_now = execution_list.pop()
-            if type(RDD_now.operation) is not TextFileOp:
-                value = RDD_now.operation(RDD_now.partition)
+            if not isinstance(RDD_now.operation,TextFileOp):
+                value = RDD_now.operation(self.partition)
             else:
                 self.partition = RDD_now.operation()
             step -= 1
         return value
+
+
+class SparkContext(RDD):
+    # confusing with def
+    # print() messeage of action
+    def __init__(self):
+        super(SparkContext,self).__init__()
+        self.leaf = []
+
+    def end(self):
+        #return ends list
+        #[A,B,C]
+        if self.childs:
+            for child in self.childs:
+                end(child)
+        else:
+            self.leaf.append(self)
+        return self.leaf
+
+
+# Test
+if __name__ == '__main__':
+    sc = SparkContext()
+    text = sc.textFile('/wc_dataset.txt')
+    mapped = text.map(lambda x: {x: 1})
+    take_res = mapped.take(10)
+    take_res = [str(x) for x in take_res]
+    print('[take]\n%s' % '\n'.join(take_res))
+
     
