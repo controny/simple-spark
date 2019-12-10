@@ -1,5 +1,4 @@
 # configure file and test files
-common.py
 dfs/
 test/
 test2.txt
