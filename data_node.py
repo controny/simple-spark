@@ -110,10 +110,11 @@ class DataNode:
         """Take lines from chunk data in memory"""
         lines = self.memory[blk_no].split('\n')
         num = int(num)
-        if num == -1:
+        if num != -1:
             # -1 means take all data
             lines = lines[:num]
-        # TODO: clear memory after perform an action?
+        # clear memory after performing an action
+        self.clear_memory()
         return pickle.dumps(lines)
 
     def reduce(self, dfs_path):
@@ -139,6 +140,9 @@ class DataNode:
 
     def ping(self):
         return '200'
+
+    def clear_memory(self):
+        self.memory.clear()
 
 # 创建DataNode对象并启动
 data_node = DataNode()
