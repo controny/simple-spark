@@ -1,6 +1,7 @@
 from common import *
 import struct
 import time
+import dill
 
 
 def parse_host_names(host_names):
@@ -11,6 +12,16 @@ def parse_host_names(host_names):
 def dfs2local_path(dfs_path):
     """Convert DFS path to local path"""
     return data_node_dir + dfs_path
+
+
+def serialize(obj):
+    """Use pickle to serialize object for sending data"""
+    return dill.dumps(obj)
+
+
+def deserialize(pkl):
+    """Use pickle to deserialize object for receiving data"""
+    return dill.loads(pkl)
 
 
 # Use a header to indicate data size, refer to https://stackoverflow.com/a/27429611

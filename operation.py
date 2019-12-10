@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 import os
+import time
 import socket
 import pickle
 from io import StringIO
@@ -9,12 +10,25 @@ import pandas as pd
 from utils import *
 from common import *
 
+
 class Operation:
     def __call__(self, *args, **kwargs):
-        raise NotImplementedError('subclasses must override __call__()!')
+        raise NotImplementedError('Subclasses of Operation must override __call__()!')
+
 
 class Transformation(Operation):
-    pass
+    def __init__(self, func):
+        self.func = func
+
+    def map(self, partition_tbl):
+        for blk_no, host_name in partition_tbl.items():
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "map {}".format(blk_no)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            time.sleep(0.1)
+            send_msg(worker_sock, serialize(self.func))
+            worker_sock.close()
 
 class Action(Operation):
     def take(self, partition_tbl, num):
@@ -29,7 +43,7 @@ class Action(Operation):
             worker_sock.connect((host_name, data_node_port))
             request = "take {} {}".format(blk_no, num)
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
-            lines = pickle.loads(recv_msg(worker_sock))
+            lines = deserialize(recv_msg(worker_sock))
             worker_sock.close()
 
             result.extend(lines)
@@ -37,6 +51,7 @@ class Action(Operation):
                 num -= len(lines)
             blk_no += 1
         return result
+
 
 class TextFileOp(Transformation):
     def __init__(self, file_path):
@@ -73,19 +88,33 @@ class TextFileOp(Transformation):
 
         return partition_tbl
 
+
+class MapOp(Transformation):
+    def __init__(self, func):
+        super(MapOp, self).__init__(func)
+
+    def __call__(self, partition_tbl, *args, **kwargs):
+        self.map(partition_tbl)
+
 class TakeOp(Action):
     def __call__(self, partition_tbl, num, *args, **kwargs):
         return self.take(partition_tbl, num)
+
 
 class CollectOp(Action):
     def __call__(self, partition_tbl, *args, **kwargs):
         return self.take(partition_tbl, -1)
 
+
 # Test
 if __name__ == '__main__':
     partition_table = TextFileOp('/wc_dataset.txt')()
     print('[partition table]\n%s' % partition_table)
+
+    MapOp(lambda x: {x: 1})(partition_table)
+
     take_res = TakeOp()(partition_table, 20)
+    take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
-    collect_res = CollectOp()(partition_table)
-    print('[collect]\n%s' % '\n'.join(collect_res))
+    # collect_res = CollectOp()(partition_table)
+    # print('[collect]\n%s' % '\n'.join(collect_res))

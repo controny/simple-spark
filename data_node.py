@@ -29,16 +29,17 @@ class DataNode:
                 
                 try:
                     # 获取请求方发送的指令
-                    request = str(recv_msg(sock_fd), encoding='utf-8')
+                    raw_request = recv_msg(sock_fd)
+                    print('raw request:', raw_request)
+                    request = str(raw_request, encoding='utf-8')
                     request = request.split()  # 指令之间使用空白符分割
                     print(request)
                     
                     cmd = request[0]  # 指令第一个为指令类型
 
                     try:
-                        if cmd == 'store':
-                            # this command is kind of special
-                            response = self.store(sock_fd, request[1])
+                        if cmd in ['store', 'map']:
+                            response = getattr(self, cmd)(sock_fd, request[1])
                         else:
                             response = getattr(self, cmd)(*request[1:])
                     except Exception as e:
@@ -98,24 +99,29 @@ class DataNode:
         return "Format datanode successfully~"
 
     def text_file(self, dfs_base_path, blk_no):
-        """Load file into memory"""
+        """Load file into memory in the form of lines"""
         dfs_path = '%s.blk%s' % (dfs_base_path, blk_no)
         local_path = dfs2local_path(dfs_path)
         with open(local_path) as f:
             chunk_data = f.read(dfs_blk_size)
-            self.memory[blk_no] = chunk_data
+            self.memory[blk_no] = chunk_data.split('\n')
         return "Load text file successfully~"
 
     def take(self, blk_no, num):
         """Take lines from chunk data in memory"""
-        lines = self.memory[blk_no].split('\n')
+        lines = self.memory[blk_no]
         num = int(num)
         if num != -1:
             # -1 means take all data
             lines = lines[:num]
         # clear memory after performing an action
         self.clear_memory()
-        return pickle.dumps(lines)
+        return serialize(lines)
+
+    def map(self, sock_fd, blk_no):
+        func = deserialize(recv_msg(sock_fd))
+        self.memory[blk_no] = list(map(func, self.memory[blk_no]))
+        return "Map data successfully~"
 
     def reduce(self, dfs_path):
         """Compute Sum(X), Sum(X^2) and Count(X) locally"""
