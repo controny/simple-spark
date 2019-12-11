@@ -2,6 +2,8 @@ from common import *
 import struct
 import time
 import dill
+from functools import reduce
+from itertools import groupby
 
 
 def parse_host_names(host_names):
@@ -22,6 +24,20 @@ def serialize(obj):
 def deserialize(pkl):
     """Use pickle to deserialize object for receiving data"""
     return dill.loads(pkl)
+
+
+def key_func(x):
+    return list(x.keys())[0]
+
+
+def value_func(x):
+    return list(x.values())[0]
+
+
+def reduce_by_key(data, func):
+    sorted_partition = sorted(data, key=key_func)
+    grouped_partition = groupby(sorted_partition, key=key_func)
+    return [{key: reduce(func, map(value_func, group))} for key, group in grouped_partition]
 
 
 # Use a header to indicate data size, refer to https://stackoverflow.com/a/27429611

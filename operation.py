@@ -11,6 +11,8 @@ from utils import *
 from common import *
 
 
+# TODO: let each node to process a batch of bulks?
+
 class Operation:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError('Subclasses of Operation must override __call__()!')
@@ -112,6 +114,28 @@ class MapOp(Transformation):
     def __call__(self, partition_tbl, step, *args, **kwargs):
         self.map(partition_tbl, step)
 
+
+class ReduceByKeyOp(Transformation):
+    def __call__(self, partition_tbl, step, *args, **kwargs):
+        # TODO:
+        #  1. Perform local reducing in each machine;
+        #  2. Let the nodes exchange data to perform global reducing
+        #  3. Collect the new partition table
+        for blk_no, host_name in partition_tbl.items():
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "local_reduce_by_key {}".format(step)
+            print('[local_reduce_by_key] connect ' + host_name)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            # TODO: package gluing?
+            time.sleep(0.1)
+            send_msg(worker_sock, serialize(self.func))
+
+            send_msg(worker_sock, bytes("transfer_reduced_data", encoding='utf-8'))
+
+            worker_sock.close()
+
+
 class TakeOp(Action):
     def __init__(self, num):
         super(TakeOp, self).__init__()
@@ -128,12 +152,12 @@ class CollectOp(Action):
 
 # Test
 if __name__ == '__main__':
-    partition_table = TextFileOp('/wc_dataset.txt')(0)
+    partition_table = TextFileOp('/glove_test.txt')(0)
     print('[partition table]\n%s' % partition_table)
 
     MapOp(lambda x: {x: 1})(partition_table, 1)
-    #
-    take_res = TakeOp(20)(partition_table, 2)
+    ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
+    take_res = TakeOp(20)(partition_table, 3)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
     # collect_res = CollectOp()(partition_table)

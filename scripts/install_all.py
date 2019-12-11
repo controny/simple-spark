@@ -3,6 +3,10 @@ sys.path.append('./')
 from common import *
 import os
 
+local_install_code = \
+    'pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt --user &'
+os.system(local_install_code)
+
 cur_dir = os.getcwd()
 
 for slave in host_list:
@@ -14,6 +18,6 @@ for slave in host_list:
     os.system(command_send_codes)
     print('installing requirements for slave [%s]' % slave)
     install_codes =\
-        'ssh {0} pip install -i https://pypi.tuna.tsinghua.edu.cn/simple some-package -r {1}/requirements.txt --user &'\
+        'ssh {0} pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple -r {1}/requirements.txt --user &'\
             .format(slave, cur_dir)
     os.system(install_codes)
