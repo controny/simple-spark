@@ -23,6 +23,9 @@ class NameNode:
     def run(self):  # 启动NameNode
         # 创建一个监听的socket
         listen_fd = socket.socket()
+        # reuse a local socket in TIME_WAIT state, without waiting for its natural timeout to expire
+        # refer to https://stackoverflow.com/questions/29217502/socket-error-address-already-in-use/29217540
+        listen_fd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             # 监听端口
             listen_fd.bind(("0.0.0.0", name_node_port))

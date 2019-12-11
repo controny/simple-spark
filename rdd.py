@@ -67,13 +67,14 @@ class RDD:
             now = now.parent
             step += 1
         # execute from root to now
-        while(step):
+        i = 0
+        while(i < step):
             RDD_now = execution_list.pop()
-            if not isinstance(RDD_now.operation,TextFileOp):
-                value = RDD_now.operation(self.partition)
+            if not isinstance(RDD_now.operation, TextFileOp):
+                value = RDD_now.operation(self.partition, i)
             else:
-                self.partition = RDD_now.operation()
-            step -= 1
+                self.partition = RDD_now.operation(i)
+            i += 1
         return value
 
 
@@ -99,9 +100,9 @@ class SparkContext(RDD):
 if __name__ == '__main__':
     sc = SparkContext()
     text = sc.textFile('/wc_dataset.txt')
-    mapped = text.map(lambda x: {x: 1})
-    take_res = mapped.take(10)
+    # mapped = text.map(lambda x: {x: 1})
+    # take_res = mapped.take(10)
+    take_res = text.take(10)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
 
-    
