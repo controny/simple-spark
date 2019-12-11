@@ -61,6 +61,6 @@ def recv_msg(sock):
     if len(header) != 0:
         data_size = struct.unpack('>i', header)[0]
         while len(data) < data_size:
-            part = sock.recv(BUF_SIZE)
+            part = sock.recv(min(BUF_SIZE, data_size-len(data)))
             data.extend(part)
     return data
