@@ -26,6 +26,7 @@ class Transformation(Operation):
             worker_sock.connect((host_name, data_node_port))
             request = "map {} {}".format(blk_no, step)
             print('[map] connect ' + host_name)
+<<<<<<< HEAD
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
@@ -36,6 +37,8 @@ class Transformation(Operation):
             worker_sock.connect((host_name, data_node_port))
             request = "filter_ {} {}".format(blk_no, step)
             print('[filter_] connect ' + host_name)
+=======
+>>>>>>> 6dd093dff06e07d687286d8971ba2cfd3833c4b9
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
@@ -121,6 +124,7 @@ class MapOp(Transformation):
 
     def __call__(self, partition_tbl, step, *args, **kwargs):
         self.map(partition_tbl, step)
+<<<<<<< HEAD
 
 class FilterOp(Transformation):
     def __init__(self, func):
@@ -128,6 +132,8 @@ class FilterOp(Transformation):
 
     def __call__(self, partition_tbl, step, *args, **kwargs):
         self.filter_(partition_tbl, step)
+=======
+>>>>>>> 6dd093dff06e07d687286d8971ba2cfd3833c4b9
 
 class TakeOp(Action):
     def __init__(self, num):

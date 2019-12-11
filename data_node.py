@@ -25,7 +25,11 @@ def handle(sock_fd, address, datanode, memory):
         try:
             if cmd in ['store']:
                 response = getattr(datanode, cmd)(sock_fd, *request[1:])
+<<<<<<< HEAD
             elif cmd in ['map','filter_']:
+=======
+            elif cmd in ['map']:
+>>>>>>> 6dd093dff06e07d687286d8971ba2cfd3833c4b9
                 response = getattr(datanode, cmd)(memory, sock_fd, *request[1:])
             elif cmd in ['take', 'text_file', 'clear_memory']:
                 response = getattr(datanode, cmd)(memory, *request[1:])
@@ -152,6 +156,7 @@ class DataNode:
         self.update_progress(memory, blk_no, step)
         return "Map data successfully~"
 
+<<<<<<< HEAD
     def filter_(self, memory, sock_fd, blk_no, step):
         print('performing [filter] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
@@ -160,6 +165,8 @@ class DataNode:
         self.update_progress(memory, blk_no, step)
         return "filter data successfully~"
     
+=======
+>>>>>>> 6dd093dff06e07d687286d8971ba2cfd3833c4b9
     def clear_memory(self, memory):
         for sub_memory in memory:
             sub_memory.clear()

@@ -34,6 +34,7 @@ class RDD:
         child = RDD(parent=self, operation=MapOp(func))
         self.childs.append(child)
         return child
+<<<<<<< HEAD
 
     def filter(self,func):
         child = RDD(parent=self, operation=FilterOp(func))
@@ -44,6 +45,13 @@ class RDD:
         operation=TakeOp(num)
         child = RDD(parent=self, operation=operation)
         self.childs.append(child)
+=======
+        
+    def take(self, num):
+        operation=TakeOp(num)
+        child = RDD(parent=self, operation=operation)
+        self.childs.append(child)
+>>>>>>> 6dd093dff06e07d687286d8971ba2cfd3833c4b9
         if isinstance(operation,Action):
             value = child.execute()
         return value    
@@ -105,9 +113,14 @@ class SparkContext(RDD):
 if __name__ == '__main__':
     sc = SparkContext()
     text = sc.textFile('/wc_dataset.txt')
+<<<<<<< HEAD
     filterdone = text.filter(lambda x: "c" in x)
     # mapped = text.map(lambda x: {x: 1})
     take_res = filterdone.take(10)
+=======
+    mapped = text.map(lambda x: {x: 1})
+    take_res = mapped.take(10)
+>>>>>>> 6dd093dff06e07d687286d8971ba2cfd3833c4b9
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
 
