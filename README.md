@@ -24,6 +24,7 @@ cd simple-spark
 # 安装所需的python包
 pip3 install --user -r requirements.txt
 # 一键部署所有节点
+python3 scripts/install_all.py
 python3 scripts/start_all.py
 # 一键终止所有节点
 python3 scripts/stop_all.py

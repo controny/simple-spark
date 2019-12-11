@@ -20,18 +20,32 @@ class Transformation(Operation):
     def __init__(self, func):
         self.func = func
 
-    def map(self, partition_tbl):
+    def map(self, partition_tbl, step):
         for blk_no, host_name in partition_tbl.items():
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
-            request = "map {}".format(blk_no)
+            request = "map {} {}".format(blk_no, step)
+            print('[map] connect ' + host_name)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            time.sleep(0.1)
+            send_msg(worker_sock, serialize(self.func))
+            worker_sock.close()
+    def filter_(self, partition_tbl, step):
+        for blk_no, host_name in partition_tbl.items():
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "filter_ {} {}".format(blk_no, step)
+            print('[filter_] connect ' + host_name)
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
             worker_sock.close()
 
 class Action(Operation):
-    def take(self, partition_tbl, num):
+    def __init__(self):
+        super(Action, self).__init__()
+        
+    def take(self, partition_tbl, num, step):
         result = []
         # take lines from bulk 0
         blk_no = 0
@@ -41,7 +55,8 @@ class Action(Operation):
                 break
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
-            request = "take {} {}".format(blk_no, num)
+            request = "take {} {} {}".format(blk_no, num, step)
+            print('[take] connect ' + host_name)
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
             lines = deserialize(recv_msg(worker_sock))
             worker_sock.close()
@@ -50,14 +65,25 @@ class Action(Operation):
             if num != -1:
                 num -= len(lines)
             blk_no += 1
+
+        self.clear_memory(partition_tbl)
         return result
 
+    def clear_memory(self, partition_tbl):
+        """Clear memory of every nodes after performing an action"""
+        for blk_no, host_name in partition_tbl.items():
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "clear_memory"
+            print('[clear_memory] connect ' + host_name)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            worker_sock.close()
 
 class TextFileOp(Transformation):
     def __init__(self, file_path):
         self.file_path = file_path
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, step, *args, **kwargs):
         """Load file from DFS and return the partition table"""
         request = "get_fat_item {}".format(self.file_path)
         print("Request: {}".format(request))
@@ -82,10 +108,10 @@ class TextFileOp(Transformation):
             partition_tbl[blk_no] = host_name
             worker_sock.connect((host_name, data_node_port))
 
-            request = "text_file {} {}".format(self.file_path, blk_no)
+            request = "text_file {} {} {}".format(self.file_path, blk_no, step)
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
             worker_sock.close()
-
+        print('partition table: %s' % partition_tbl)
         return partition_tbl
 
 
@@ -93,27 +119,38 @@ class MapOp(Transformation):
     def __init__(self, func):
         super(MapOp, self).__init__(func)
 
-    def __call__(self, partition_tbl, *args, **kwargs):
-        self.map(partition_tbl)
+    def __call__(self, partition_tbl, step, *args, **kwargs):
+        self.map(partition_tbl, step)
+
+class FilterOp(Transformation):
+    def __init__(self, func):
+        super(FilterOp, self).__init__(func)
+
+    def __call__(self, partition_tbl, step, *args, **kwargs):
+        self.filter_(partition_tbl, step)
 
 class TakeOp(Action):
-    def __call__(self, partition_tbl, num, *args, **kwargs):
-        return self.take(partition_tbl, num)
+    def __init__(self, num):
+        super(TakeOp, self).__init__()
+        self.num = num
+        
+    def __call__(self, partition_tbl, step, *args, **kwargs):
+        return self.take(partition_tbl, self.num, step)
 
 
 class CollectOp(Action):
-    def __call__(self, partition_tbl, *args, **kwargs):
-        return self.take(partition_tbl, -1)
+    def __call__(self, partition_tbl, step, *args, **kwargs):
+        return self.take(partition_tbl, -1, step)
 
 
 # Test
 if __name__ == '__main__':
-    partition_table = TextFileOp('/wc_dataset.txt')()
+    partition_table = TextFileOp('/wc_dataset.txt')(0)
     print('[partition table]\n%s' % partition_table)
 
-    MapOp(lambda x: {x: 1})(partition_table)
-
-    take_res = TakeOp()(partition_table, 20)
+    MapOp(lambda x: {x: 1})(partition_table, 1)
+    #
+    take_res = TakeOp(20)(partition_table, 2)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
     # collect_res = CollectOp()(partition_table)
