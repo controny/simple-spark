@@ -27,7 +27,7 @@ def handle(sock_fd, address, datanode, memory):
                 response = getattr(datanode, cmd)(sock_fd, *request[1:])
             elif cmd in ['map']:
                 response = getattr(datanode, cmd)(memory, sock_fd, *request[1:])
-            elif cmd in ['take', 'text_file']:
+            elif cmd in ['take', 'text_file', 'clear_memory']:
                 response = getattr(datanode, cmd)(memory, *request[1:])
             else:
                 response = getattr(datanode, cmd)(*request[1:])
@@ -61,9 +61,8 @@ class DataNode:
         # 'Cannot modify dictionaries inside dictionaries using Managers'
         # refer to https://bugs.python.org/issue6766
         manager = Manager()
-        memory = manager.dict()
-        memory['partitions'] = manager.dict()
-        memory['progress'] = manager.dict()
+        memory_partitions = manager.dict()
+        memory_progress = manager.dict()
         try:
             # 监听端口
             listen_fd.bind(("0.0.0.0", data_node_port))
@@ -74,7 +73,7 @@ class DataNode:
                 sock_fd, addr = listen_fd.accept()
                 print("Received request from {}".format(addr))
 
-                process = Process(target=handle, args=(sock_fd, addr, self, memory))
+                process = Process(target=handle, args=(sock_fd, addr, self, [memory_partitions, memory_progress]))
                 process.daemon = True
                 process.start()
 
@@ -128,7 +127,7 @@ class DataNode:
         local_path = dfs2local_path(dfs_path)
         with open(local_path) as f:
             chunk_data = f.read(dfs_blk_size)
-            memory['partitions'][blk_no] = chunk_data.split('\n')
+            memory[0][blk_no] = chunk_data.split('\n')
         self.update_progress(memory, blk_no, step)
         return "Load text file successfully~"
 
@@ -136,44 +135,44 @@ class DataNode:
         """Take lines from chunk data in memory"""
         print('performing [take] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
-        lines = memory['partitions'][blk_no]
+        lines = memory[0][blk_no]
         num = int(num)
         if num != -1:
             # -1 means take all data
             lines = lines[:num]
         serialized = serialize(lines)
         self.update_progress(memory, blk_no, step)
-        # clear memory after performing an action
-        self.clear_memory(memory)
         return serialized
 
     def map(self, memory, sock_fd, blk_no, step):
         print('performing [map] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         func = deserialize(recv_msg(sock_fd))
-        memory['partitions'][blk_no] = list(map(func, memory['partitions'][blk_no]))
+        memory[0][blk_no] = list(map(func, memory[0][blk_no]))
         self.update_progress(memory, blk_no, step)
         return "Map data successfully~"
+
+    def clear_memory(self, memory):
+        for sub_memory in memory:
+            sub_memory.clear()
+        return "Clear memory successfully~"
 
     def ping(self):
         return '200'
 
-    def clear_memory(self, memory):
-        memory.clear()
-
     def update_progress(self, memory, blk_no, step):
-        memory['progress'][blk_no] = int(step)
-        # TODO: memory not updated !!!
-        print('updated progress: ', memory['progress'])
+        memory[1][blk_no] = int(step)
+        print('updated progress: ', memory[1])
 
     def check_progress(self, memory, blk_no, step):
-        print('check progress: ', memory['progress'])
+        print('check progress: ', memory[1])
+        memory_progress = memory[1]
         # The operation must wait when
         # 1. The bulk has not been loaded
         # 2. The current progress of the bulk >= step-1
-        while memory['progress'].get(blk_no) is not None or memory['progress'][blk_no] < int(step)-1:
+        while memory_progress.get(blk_no) is None or memory_progress[blk_no] < int(step)-1:
             print('blk %s: waiting for the preceding operations to finish' % blk_no)
-            time.sleep(0.1)
+            time.sleep(0.05)
 
 # 创建DataNode对象并启动
 data_node = DataNode()

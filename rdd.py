@@ -100,9 +100,8 @@ class SparkContext(RDD):
 if __name__ == '__main__':
     sc = SparkContext()
     text = sc.textFile('/wc_dataset.txt')
-    # mapped = text.map(lambda x: {x: 1})
-    # take_res = mapped.take(10)
-    take_res = text.take(10)
+    mapped = text.map(lambda x: {x: 1})
+    take_res = mapped.take(10)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
 

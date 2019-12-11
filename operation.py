@@ -55,8 +55,19 @@ class Action(Operation):
             if num != -1:
                 num -= len(lines)
             blk_no += 1
+
+        self.clear_memory(partition_tbl)
         return result
 
+    def clear_memory(self, partition_tbl):
+        """Clear memory of every nodes after performing an action"""
+        for blk_no, host_name in partition_tbl.items():
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "clear_memory"
+            print('[clear_memory] connect ' + host_name)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            worker_sock.close()
 
 class TextFileOp(Transformation):
     def __init__(self, file_path):
@@ -120,10 +131,10 @@ if __name__ == '__main__':
     partition_table = TextFileOp('/wc_dataset.txt')(0)
     print('[partition table]\n%s' % partition_table)
 
-    # MapOp(lambda x: {x: 1})(partition_table)
+    MapOp(lambda x: {x: 1})(partition_table, 1)
     #
-    # take_res = TakeOp()(partition_table, 20)
-    # take_res = [str(x) for x in take_res]
-    # print('[take]\n%s' % '\n'.join(take_res))
+    take_res = TakeOp(20)(partition_table, 2)
+    take_res = [str(x) for x in take_res]
+    print('[take]\n%s' % '\n'.join(take_res))
     # collect_res = CollectOp()(partition_table)
     # print('[collect]\n%s' % '\n'.join(collect_res))
