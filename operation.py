@@ -4,6 +4,9 @@ import os
 import time
 import socket
 import pickle
+import traceback
+import pickle
+from multiprocessing import Process, Manager
 from io import StringIO
 import numpy as np
 import pandas as pd
@@ -16,6 +19,16 @@ from common import *
 class Operation:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError('Subclasses of Operation must override __call__()!')
+
+    def clear_memory(self):
+        """Clear memory of every nodes after performing an action"""
+        for host_name in host_list:
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "clear_memory"
+            print('[clear_memory] connect ' + host_name)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            worker_sock.close()
 
 
 class Transformation(Operation):
@@ -58,18 +71,9 @@ class Action(Operation):
                 num -= len(lines)
             blk_no += 1
 
-        self.clear_memory(partition_tbl)
+        # some nodes will have to clear memory before finishing all operations, but that's ok
+        self.clear_memory()
         return result
-
-    def clear_memory(self, partition_tbl):
-        """Clear memory of every nodes after performing an action"""
-        for blk_no, host_name in partition_tbl.items():
-            worker_sock = socket.socket()
-            worker_sock.connect((host_name, data_node_port))
-            request = "clear_memory"
-            print('[clear_memory] connect ' + host_name)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
-            worker_sock.close()
 
 class TextFileOp(Transformation):
     def __init__(self, file_path):
@@ -91,6 +95,8 @@ class TextFileOp(Transformation):
         fat = pd.read_csv(StringIO(fat_pd))
 
         # 2. let workers to load files into memory
+        # make sure the memory is empty at first
+        self.clear_memory()
         partition_tbl = {}  # blk_no: host_name
         for idx, row in fat.iterrows():
             worker_sock = socket.socket()
@@ -117,23 +123,53 @@ class MapOp(Transformation):
 
 class ReduceByKeyOp(Transformation):
     def __call__(self, partition_tbl, step, *args, **kwargs):
-        # TODO:
-        #  1. Perform local reducing in each machine;
-        #  2. Let the nodes exchange data to perform global reducing
-        #  3. Collect the new partition table
-        for blk_no, host_name in partition_tbl.items():
+        """
+        1. Perform local reducing in each machine;
+        2. Let the nodes exchange data to perform global reducing
+        3. Collect new partition table
+        """
+        def handle(host_name, partition_tbl):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "local_reduce_by_key {}".format(step)
             print('[local_reduce_by_key] connect ' + host_name)
             send_msg(worker_sock, bytes(request, encoding='utf-8'))
-            # TODO: package gluing?
-            time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
+            worker_sock.close()
 
+            # must set a new socket for another request
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            print('[transfer_reduced_data] connect ' + host_name)
             send_msg(worker_sock, bytes("transfer_reduced_data", encoding='utf-8'))
 
+            while True:
+                try:
+                    received = recv_msg(worker_sock)
+                    sub_partition_tbl = deserialize(received)
+                    break
+                except pickle.UnpicklingError:
+                    print('try to get sub partition table but receive:', received)
+                except Exception as e:
+                    print('fail to receive partition table:')
+                    traceback.print_exc()
+                    pass
+            # TODO: discriminate keys
+            print('sub partition table:\n', {k: sub_partition_tbl[k][:10] for k in sub_partition_tbl.keys()})
+            partition_tbl.update(sub_partition_tbl)
+
             worker_sock.close()
+
+        manager = Manager()
+        new_partition_tbl = manager.dict()
+        jobs = []
+        for host_name in host_list:
+            process = Process(target=handle, args=(host_name, new_partition_tbl))
+            process.start()
+            jobs.append(process)
+
+        for job in jobs:
+            job.join()
 
 
 class TakeOp(Action):
@@ -147,12 +183,13 @@ class TakeOp(Action):
 
 class CollectOp(Action):
     def __call__(self, partition_tbl, step, *args, **kwargs):
+        # TODO: unable to take all data from all nodes
         return self.take(partition_tbl, -1, step)
 
 
 # Test
 if __name__ == '__main__':
-    partition_table = TextFileOp('/glove_test.txt')(0)
+    partition_table = TextFileOp('/wc_dataset.txt')(0)
     print('[partition table]\n%s' % partition_table)
 
     MapOp(lambda x: {x: 1})(partition_table, 1)
@@ -160,5 +197,6 @@ if __name__ == '__main__':
     take_res = TakeOp(20)(partition_table, 3)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
-    # collect_res = CollectOp()(partition_table)
+    # collect_res = CollectOp()(partition_table, 3)
+    # collect_res = [str(x) for x in collect_res]
     # print('[collect]\n%s' % '\n'.join(collect_res))

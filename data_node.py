@@ -2,7 +2,7 @@
 import os
 import sys
 import socket
-from multiprocessing import Process, Manager
+from multiprocessing import Process, Manager, managers
 import pandas as pd
 import numpy as np
 import traceback
@@ -17,7 +17,6 @@ def handle(sock_fd, address, datanode, memory):
     try:
         # 获取请求方发送的指令
         raw_request = recv_msg(sock_fd)
-        print('raw request', raw_request)
         request = str(raw_request, encoding='utf-8')
         request = request.split()  # 指令之间使用空白符分割
         print(request)
@@ -27,7 +26,7 @@ def handle(sock_fd, address, datanode, memory):
         try:
             if cmd in ['store']:
                 response = getattr(datanode, cmd)(sock_fd, *request[1:])
-            elif cmd in ['map', 'local_reduce_by_key', 'store_reduced_data']:
+            elif cmd in ['map', 'local_reduce_by_key', 'store_reduced_data', 'transfer_reduced_data']:
                 response = getattr(datanode, cmd)(memory, sock_fd, *request[1:])
             elif cmd in ['load', 'rm', 'format', 'ping']:
                 response = getattr(datanode, cmd)(*request[1:])
@@ -66,7 +65,8 @@ class DataNode:
         memory_partitions = manager.dict()
         memory_progress = manager.dict()
         memory_buffer = manager.dict()
-        memory = [memory_partitions, memory_progress, memory_buffer]
+        memory_middle_result = manager.list()
+        memory = [memory_partitions, memory_progress, memory_buffer, memory_middle_result]
         try:
             # 监听端口
             listen_fd.bind(("0.0.0.0", data_node_port))
@@ -168,8 +168,10 @@ class DataNode:
         raw_func = recv_msg(sock_fd)
         func = deserialize(raw_func)
         # store some variables for later usage
-        memory[2]['func'] = raw_func
-        memory[2]['step'] = step
+        buffer = memory[2]
+        buffer['func'] = raw_func
+        buffer['step'] = step
+        buffer['data_flag'] = len(host_list)
         jobs = []
 
         def handle(blk_no):
@@ -188,20 +190,27 @@ class DataNode:
         all_values = sum(partitions.values(), [])
         # use the buffer to store the result
         local_res = reduce_by_key(all_values, func)
-        memory[2]['local_reduce'] = local_res
+        buffer['local_reduce'] = local_res
 
         return "Local reduce by key successfully~"
 
-    def transfer_reduced_data(self, memory):
+    def transfer_reduced_data(self, memory, sock_fd):
         """Transfer locally-reduced data to the corresponding hosts defined by hash function"""
+        buffer = memory[2]
+        buffer['sock_fd'] = sock_fd
         # wait for local reduce to finish
         while memory[2].get('local_reduce') is None:
+            print('waiting for local reduce to finish')
             time.sleep(0.05)
 
         num_reducer = len(host_list)
-
-        def handle(element):
+        # pack the elements of the same target host and send together
+        to_transfer = {host: [] for host in host_list}
+        for element in memory[2]['local_reduce']:
             target_host = host_list[self.hash_key(element, num_reducer)]
+            to_transfer[target_host].append(element)
+
+        def handle(target_host, data):
             sock = socket.socket()
             sock.connect((target_host, data_node_port))
             message = ''
@@ -209,13 +218,13 @@ class DataNode:
                 request = "store_reduced_data"
                 print('[store_reduced_data] connect ' + target_host)
                 send_msg(sock, bytes(request, encoding='utf-8'))
-                send_msg(sock, serialize(element))
+                send_msg(sock, serialize(data))
                 message = str(recv_msg(sock), encoding='utf-8')
             sock.close()
 
         jobs = []
-        for element in memory[2]['local_reduce']:
-            process = Process(target=handle, args=element)
+        for host in host_list:
+            process = Process(target=handle, args=(host, to_transfer[host]))
             process.start()
             jobs.append(process)
 
@@ -226,17 +235,16 @@ class DataNode:
         for host in host_list:
             sock = socket.socket()
             sock.connect((host, data_node_port))
+            print('[global_reduce_by_key] connect ' + host)
             send_msg(sock, bytes('global_reduce_by_key', encoding='utf-8'))
             sock.close()
 
+        return '200'
+
     def store_reduced_data(self, memory, sock_fd):
         """Store received reduced data in the buffer of memory"""
-        data = recv_msg(sock_fd)
-        buffer = memory[2]
-        if buffer.get('global_reduce') is None:
-            buffer['global_reduce'] = [data]
-        else:
-            buffer['global_reduce'].append(data)
+        data = deserialize(recv_msg(sock_fd))
+        memory[3].extend(data)
         return '200'
 
     def global_reduce_by_key(self, memory):
@@ -245,42 +253,43 @@ class DataNode:
         2. Combine all received data, perform reducing again and finally update partition table
         """
         buffer = memory[2]
-        if buffer.get('data_flag') is None:
-            buffer['data_flag'] = len(host_list)
-        else:
-            buffer['data_flag'] -= 1
+        buffer['data_flag'] -= 1
+        print('data_flag:', buffer['data_flag'])
 
         if buffer['data_flag'] == 0:
-            buffer['global_reduce'] = reduce_by_key(buffer['global_reduce'], deserialize(buffer['func']))
+            global_reduce = memory[3]
+            result = reduce_by_key(global_reduce, deserialize(buffer['func']))
+            # make sure not to reassign a normal list to memory
+            for idx, element in enumerate(result):
+                global_reduce[idx] = element
             self.update_memory_with_new_partitions(memory)
+            # convert new partition to dict and send back to client
+            send_msg(buffer['sock_fd'], serialize(dict(memory[0])))
             return '200'
 
         return '404'
-
-    def get_partitions(self, memory):
-        return memory[0]
 
     def hash_key(self, element, num_reducers):
         return hash(list(element.keys())[0]) % num_reducers
 
     def clear_memory(self, memory):
         for sub_memory in memory:
-            sub_memory.clear()
+            if isinstance(sub_memory, managers.ListProxy):
+                sub_memory[:] = []
+            else:
+                sub_memory.clear()
         return "Clear memory successfully~"
 
     def update_memory_with_new_partitions(self, memory):
         """Substitute original partition table with reduced results"""
-        partitions, progress, buffer = memory
+        partitions, progress, buffer, middle_results = memory
 
         partitions.clear()
-        partitions.update(self.split_data_into_bulks(buffer['global_reduce']))
+        partitions.update(self.split_data_into_bulks(middle_results))
 
         step = buffer['step']
-        progress.clear()
         for blk_no in partitions.keys():
             self.update_progress(memory, blk_no, step)
-
-        buffer.clear()
 
     def split_data_into_bulks(self, data):
         res = {}
