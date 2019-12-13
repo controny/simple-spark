@@ -2,6 +2,7 @@
 import os
 import sys
 import socket
+import hashlib
 from multiprocessing import Process, Manager, managers
 import pandas as pd
 import numpy as np
@@ -26,7 +27,7 @@ def handle(sock_fd, address, datanode, memory):
         try:
             if cmd in ['store']:
                 response = getattr(datanode, cmd)(sock_fd, *request[1:])
-            elif cmd in ['map', 'local_reduce_by_key', 'store_reduced_data', 'transfer_reduced_data']:
+            elif cmd in ['map', 'local_reduce_by_key', 'store_reduced_data', 'transfer_reduced_data', 'update_blk_no']:
                 response = getattr(datanode, cmd)(memory, sock_fd, *request[1:])
             elif cmd in ['load', 'rm', 'format', 'ping']:
                 response = getattr(datanode, cmd)(*request[1:])
@@ -263,14 +264,26 @@ class DataNode:
             for idx, element in enumerate(result):
                 global_reduce[idx] = element
             self.update_memory_with_new_partitions(memory)
-            # convert new partition to dict and send back to client
-            send_msg(buffer['sock_fd'], serialize(dict(memory[0])))
+            # send new bulk numbers back to client
+            send_msg(buffer['sock_fd'], serialize(memory[0].keys()))
             return '200'
 
         return '404'
 
+    def update_blk_no(self, memory, sock_fd):
+        """Rearrange bulk number according to message from client"""
+        new_blk_nos = deserialize(recv_msg(sock_fd))
+        partitions = memory[0]
+        old_copy = dict(partitions)
+        partitions.clear()
+        for k, v in old_copy.items():
+            new_key = new_blk_nos[k]
+            partitions[new_key] = v
+        return '200'
+
     def hash_key(self, element, num_reducers):
-        return hash(list(element.keys())[0]) % num_reducers
+        key = key_func(element)
+        return int(hashlib.sha1(key.encode('utf-8')).hexdigest(), 16) % num_reducers
 
     def clear_memory(self, memory):
         for sub_memory in memory:

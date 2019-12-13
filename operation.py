@@ -35,6 +35,7 @@ class Transformation(Operation):
     def __init__(self, func):
         self.func = func
 
+    # TODO: in spark `tuple` is used instead of `dict`
     def map(self, partition_tbl, step):
         for blk_no, host_name in partition_tbl.items():
             worker_sock = socket.socket()
@@ -128,7 +129,7 @@ class ReduceByKeyOp(Transformation):
         2. Let the nodes exchange data to perform global reducing
         3. Collect new partition table
         """
-        def handle(host_name, partition_tbl):
+        def handle(host_name, partition_tbl, cur_blk_no, lock):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "local_reduce_by_key {}".format(step)
@@ -146,30 +147,43 @@ class ReduceByKeyOp(Transformation):
             while True:
                 try:
                     received = recv_msg(worker_sock)
-                    sub_partition_tbl = deserialize(received)
+                    blk_nos = deserialize(received)
                     break
                 except pickle.UnpicklingError:
-                    print('try to get sub partition table but receive:', received)
-                except Exception as e:
-                    print('fail to receive partition table:')
+                    print('try to get sub bulk numbers but receive:', received)
+                except Exception:
+                    print('fail to receive sub bulk numbers:')
                     traceback.print_exc()
                     pass
-            # TODO: discriminate keys
-            print('sub partition table:\n', {k: sub_partition_tbl[k][:10] for k in sub_partition_tbl.keys()})
-            partition_tbl.update(sub_partition_tbl)
+
+            # rearrange bulk number
+            new_blk_nos = {}  # {old_blk_no: new_blk_no}
+            for old_blk_no in blk_nos:
+                lock.acquire()
+                new_blk_nos[old_blk_no] = cur_blk_no.value
+                partition_tbl[cur_blk_no.value] = host_name
+                cur_blk_no.value += 1
+                lock.release()
+            print('[update_blk_no] connect ' + host_name)
+            send_msg(worker_sock, bytes("update_blk_no", encoding='utf-8'))
+            send_msg(worker_sock, serialize(new_blk_nos))
 
             worker_sock.close()
 
         manager = Manager()
         new_partition_tbl = manager.dict()
+        cur_blk_no = manager.Value('i', 0)
+        lock = manager.Lock()
         jobs = []
         for host_name in host_list:
-            process = Process(target=handle, args=(host_name, new_partition_tbl))
+            process = Process(target=handle, args=(host_name, new_partition_tbl, cur_blk_no, lock))
             process.start()
             jobs.append(process)
 
         for job in jobs:
             job.join()
+
+        return dict(new_partition_tbl)
 
 
 class TakeOp(Action):
@@ -193,7 +207,8 @@ if __name__ == '__main__':
     print('[partition table]\n%s' % partition_table)
 
     MapOp(lambda x: {x: 1})(partition_table, 1)
-    ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
+    partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
+    print('[new partition table]\n%s' % partition_table)
     take_res = TakeOp(20)(partition_table, 3)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
