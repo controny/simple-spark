@@ -16,13 +16,12 @@ from utils import *
 def handle(sock_fd, address, datanode, memory):
     print("Connection from : ", address)
     try:
-        # 获取请求方发送的指令
         raw_request = recv_msg(sock_fd)
         request = str(raw_request, encoding='utf-8')
-        request = request.split()  # 指令之间使用空白符分割
+        request = request.split()
         print(request)
 
-        cmd = request[0]  # 指令第一个为指令类型
+        cmd = request[0]
 
         try:
             if cmd in ['store']:
@@ -76,7 +75,7 @@ class DataNode:
             while True:
                 # 等待连接，连接后返回通信用的套接字
                 sock_fd, addr = listen_fd.accept()
-                print("Received request from {}".format(addr))
+                print("Receive connection request from {}".format(addr))
 
                 process = Process(target=handle, args=(sock_fd, addr, self, memory))
                 process.start()
@@ -188,9 +187,11 @@ class DataNode:
         # wait for all processes to finish
         for job in jobs:
             job.join()
+        # TODO: sometimes a node will produce a list
         all_values = sum(partitions.values(), [])
-        # use the buffer to store the result
+        assert isinstance(all_values, list) and all([isinstance(x, dict) for x in all_values]), partitions.keys[:10]
         local_res = reduce_by_key(all_values, func)
+        # use the buffer to store the result
         buffer['local_reduce'] = local_res
 
         return "Local reduce by key successfully~"

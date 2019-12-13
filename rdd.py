@@ -35,6 +35,11 @@ class RDD:
         self.childs.append(child)
         return child
 
+    def reduceByKey(self, func):
+        child = RDD(parent=self, operation=ReduceByKeyOp(func))
+        self.childs.append(child)
+        return child
+
     def filter(self,func):
         child = RDD(parent=self, operation=FilterOp(func))
         self.childs.append(child)
@@ -75,7 +80,10 @@ class RDD:
         i = 0
         while(i < step):
             RDD_now = execution_list.pop()
-            if not isinstance(RDD_now.operation, TextFileOp):
+            if isinstance(RDD_now.operation, ReduceByKeyOp):
+                # reduceByKey will update partition table
+                self.partition = RDD_now.operation(self.partition, i)
+            elif not isinstance(RDD_now.operation, TextFileOp):
                 value = RDD_now.operation(self.partition, i)
             else:
                 self.partition = RDD_now.operation(i)
@@ -103,11 +111,15 @@ class SparkContext(RDD):
 
 # Test
 if __name__ == '__main__':
-    sc = SparkContext()
-    text = sc.textFile('/wc_dataset.txt')
-    filterdone = text.filter(lambda x: "c" in x)
-    # mapped = text.map(lambda x: {x: 1})
-    take_res = filterdone.take(10)
-    take_res = [str(x) for x in take_res]
-    print('[take]\n%s' % '\n'.join(take_res))
-
+    try:
+        sc = SparkContext()
+        text = sc.textFile('/wc_dataset.txt')
+        mapped = text.map(lambda x: {x: 1})
+        reduced = mapped.reduceByKey(lambda a, b: a + b)
+        filterdone = reduced.filter(lambda x: "c" in key_func(x))
+        take_res = filterdone.take(10)
+        take_res = [str(x) for x in take_res]
+        print('[take]\n%s' % '\n'.join(take_res))
+    finally:
+        # clear memory of all nodes whatever
+        Operation.clear_memory()

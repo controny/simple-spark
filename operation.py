@@ -20,7 +20,8 @@ class Operation:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError('Subclasses of Operation must override __call__()!')
 
-    def clear_memory(self):
+    @staticmethod
+    def clear_memory():
         """Clear memory of every nodes after performing an action"""
         for host_name in host_list:
             worker_sock = socket.socket()
@@ -35,7 +36,6 @@ class Transformation(Operation):
     def __init__(self, func):
         self.func = func
 
-    # TODO: in spark `tuple` is used instead of `dict`
     def map(self, partition_tbl, step):
         for blk_no, host_name in partition_tbl.items():
             worker_sock = socket.socket()
@@ -64,8 +64,9 @@ class Action(Operation):
         
     def take(self, partition_tbl, num, step):
         result = []
-        # take lines from bulk 0
+        # take lines starting from bulk 0
         blk_no = 0
+        # TODO: cannot succeed when blk_no > 0 when reduceByKey is involved
         while num > 0 or num == -1:
             host_name = partition_tbl.get(blk_no)
             if host_name is None:
@@ -169,24 +170,29 @@ class ReduceByKeyOp(Transformation):
                     blk_nos = deserialize(received)
                     break
                 except pickle.UnpicklingError:
-                    print('try to get sub bulk numbers but receive:', received)
+                    print('try to get bulk numbers of %s but receive:' % host_name, received)
                 except Exception:
                     print('fail to receive sub bulk numbers:')
                     traceback.print_exc()
                     pass
+            worker_sock.close()
 
             # rearrange bulk number
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
             new_blk_nos = {}  # {old_blk_no: new_blk_no}
             for old_blk_no in blk_nos:
                 lock.acquire()
-                new_blk_nos[old_blk_no] = cur_blk_no.value
+                new_blk_nos[old_blk_no] = str(cur_blk_no.value)
                 partition_tbl[cur_blk_no.value] = host_name
                 cur_blk_no.value += 1
                 lock.release()
-            print('[update_blk_no] connect ' + host_name)
-            send_msg(worker_sock, bytes("update_blk_no", encoding='utf-8'))
-            send_msg(worker_sock, serialize(new_blk_nos))
-
+            message = ''
+            while message != '200':
+                print('[update_blk_no] connect ' + host_name)
+                send_msg(worker_sock, bytes("update_blk_no", encoding='utf-8'))
+                send_msg(worker_sock, serialize(new_blk_nos))
+                message = str(recv_msg(worker_sock), encoding='utf-8')
             worker_sock.close()
 
         manager = Manager()
@@ -222,17 +228,20 @@ class CollectOp(Action):
 
 # Test
 if __name__ == '__main__':
-    partition_table = TextFileOp('/wc_dataset.txt')(0)
-    print('[partition table]\n%s' % partition_table)
+    try:
+        partition_table = TextFileOp('/wc_dataset.txt')(0)
+        print('[partition table]\n%s' % partition_table)
 
-    MapOp(lambda x: {x: 1})(partition_table, 1)
-    partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
-    print('[new partition table]\n%s' % partition_table)
-    partition_table = FilterOp(lambda x: x == 'American')(partition_table, 3)
-    print('[new partition table]\n%s' % partition_table)
-    take_res = TakeOp(20)(partition_table, 4)
-    take_res = [str(x) for x in take_res]
-    print('[take]\n%s' % '\n'.join(take_res))
-    # collect_res = CollectOp()(partition_table, 3)
-    # collect_res = [str(x) for x in collect_res]
-    # print('[collect]\n%s' % '\n'.join(collect_res))
+        MapOp(lambda x: {x: 1})(partition_table, 1)
+        partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
+        print('[new partition table]\n%s' % partition_table)
+        FilterOp(lambda x: key_func(x) != 'American')(partition_table, 3)
+        take_res = TakeOp(20)(partition_table, 4)
+        take_res = [str(x) for x in take_res]
+        print('[take]\n%s' % '\n'.join(take_res))
+        # collect_res = CollectOp()(partition_table, 3)
+        # collect_res = [str(x) for x in collect_res]
+        # print('[collect]\n%s' % '\n'.join(collect_res))
+    finally:
+        # clear memory of all nodes whatever
+        Operation.clear_memory()

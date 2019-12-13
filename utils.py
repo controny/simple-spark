@@ -35,6 +35,7 @@ def value_func(x):
 
 
 def reduce_by_key(data, func):
+    # TODO: convert to tuple-based record
     sorted_partition = sorted(data, key=key_func)
     grouped_partition = groupby(sorted_partition, key=key_func)
     return [{key: reduce(func, map(value_func, group))} for key, group in grouped_partition]
