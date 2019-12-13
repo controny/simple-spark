@@ -27,7 +27,7 @@ def handle(sock_fd, address, datanode, memory):
         try:
             if cmd in ['store']:
                 response = getattr(datanode, cmd)(sock_fd, *request[1:])
-            elif cmd in ['map', 'local_reduce_by_key', 'store_reduced_data', 'transfer_reduced_data', 'update_blk_no']:
+            elif cmd in ['map', 'local_reduce_by_key', 'store_reduced_data', 'transfer_reduced_data', 'update_blk_no', 'filter_']:
                 response = getattr(datanode, cmd)(memory, sock_fd, *request[1:])
             elif cmd in ['load', 'rm', 'format', 'ping']:
                 response = getattr(datanode, cmd)(*request[1:])
@@ -285,6 +285,14 @@ class DataNode:
         key = key_func(element)
         return int(hashlib.sha1(key.encode('utf-8')).hexdigest(), 16) % num_reducers
 
+    def filter_(self, memory, sock_fd, blk_no, step):
+        print('performing [filter] operation for bulk ' + blk_no)
+        self.check_progress(memory, blk_no, step)
+        func = deserialize(recv_msg(sock_fd))
+        memory[0][blk_no] = list(filter(func, memory[0][blk_no]))
+        self.update_progress(memory, blk_no, step)
+        return "filter data successfully~"
+    
     def clear_memory(self, memory):
         for sub_memory in memory:
             if isinstance(sub_memory, managers.ListProxy):

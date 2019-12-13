@@ -47,6 +47,17 @@ class Transformation(Operation):
             send_msg(worker_sock, serialize(self.func))
             worker_sock.close()
 
+    def filter_(self, partition_tbl, step):
+        for blk_no, host_name in partition_tbl.items():
+            worker_sock = socket.socket()
+            worker_sock.connect((host_name, data_node_port))
+            request = "filter_ {} {}".format(blk_no, step)
+            print('[filter_] connect ' + host_name)
+            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            time.sleep(0.1)
+            send_msg(worker_sock, serialize(self.func))
+            worker_sock.close()
+
 class Action(Operation):
     def __init__(self):
         super(Action, self).__init__()
@@ -120,6 +131,14 @@ class MapOp(Transformation):
 
     def __call__(self, partition_tbl, step, *args, **kwargs):
         self.map(partition_tbl, step)
+
+
+class FilterOp(Transformation):
+    def __init__(self, func):
+        super(FilterOp, self).__init__(func)
+
+    def __call__(self, partition_tbl, step, *args, **kwargs):
+        self.filter_(partition_tbl, step)
 
 
 class ReduceByKeyOp(Transformation):
@@ -209,7 +228,9 @@ if __name__ == '__main__':
     MapOp(lambda x: {x: 1})(partition_table, 1)
     partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
     print('[new partition table]\n%s' % partition_table)
-    take_res = TakeOp(20)(partition_table, 3)
+    partition_table = FilterOp(lambda x: x == 'American')(partition_table, 3)
+    print('[new partition table]\n%s' % partition_table)
+    take_res = TakeOp(20)(partition_table, 4)
     take_res = [str(x) for x in take_res]
     print('[take]\n%s' % '\n'.join(take_res))
     # collect_res = CollectOp()(partition_table, 3)
