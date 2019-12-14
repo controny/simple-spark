@@ -27,18 +27,20 @@ def deserialize(pkl):
 
 
 def key_func(x):
-    return list(x.keys())[0]
+    return x[0]
 
 
 def value_func(x):
-    return list(x.values())[0]
+    return x[1]
 
 
 def reduce_by_key(data, func):
-    # TODO: convert to tuple-based record
+    # tuple-based record by default
     sorted_partition = sorted(data, key=key_func)
-    grouped_partition = groupby(sorted_partition, key=key_func)
-    return [{key: reduce(func, map(value_func, group))} for key, group in grouped_partition]
+    key_group = [(key, list(map(value_func, group))) for key, group in groupby(sorted_partition, key=key_func)]
+    # example of `key_group`: [ ('word1', [1, 1, 1]), ('word2', [1, 1]) ]
+    result = [(key, reduce(func, group)) for key, group in key_group]
+    return result
 
 
 # Use a header to indicate data size, refer to https://stackoverflow.com/a/27429611

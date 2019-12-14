@@ -40,9 +40,8 @@ def handle(sock_fd, address, datanode, memory):
         if type(response) is not bytes:
             response = bytes(response, encoding='utf-8')
         send_msg(sock_fd, response)
-    except KeyboardInterrupt:
-        sock_fd.close()
-        return
+    except BrokenPipeError:
+        pass
     except Exception:
         traceback.print_exc()
     finally:
@@ -189,7 +188,7 @@ class DataNode:
             job.join()
         # TODO: sometimes a node will produce a list
         all_values = sum(partitions.values(), [])
-        assert isinstance(all_values, list) and all([isinstance(x, dict) for x in all_values]), partitions.keys[:10]
+        assert isinstance(all_values, list) and all([isinstance(x, tuple) for x in all_values]), partitions.values()[:10]
         local_res = reduce_by_key(all_values, func)
         # use the buffer to store the result
         buffer['local_reduce'] = local_res
@@ -202,7 +201,7 @@ class DataNode:
         buffer['sock_fd'] = sock_fd
         # wait for local reduce to finish
         while memory[2].get('local_reduce') is None:
-            print('waiting for local reduce to finish')
+            # print('waiting for local reduce to finish')
             time.sleep(0.05)
 
         num_reducer = len(host_list)
