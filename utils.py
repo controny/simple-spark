@@ -4,7 +4,40 @@ import time
 import dill
 from functools import reduce
 from itertools import groupby
+import random
+import numpy as np
 
+def random_gen(k, points):
+    random.shuffle(points)
+    random_list = []
+    for i in range(k):
+        random_list.append(points[i])
+    return random_list
+
+def distanceSquared(vector1,vector2):
+  # dist = 0
+    vector1 = np.array(vector1)
+    vector2 = np.array(vector2)
+    dist = np.sum((vector1 - vector2)**2)
+    return dist
+
+def addPoints(x,y):
+    point = np.array(x[0]) + np.array(y[0]).tolist()
+    num = x[1] + y[1]
+    return  (point, num)
+
+def average(newpoint):
+    point = []
+    point = (np.array(newpoint[1][0])/newpoint[1][1]).tolist()
+    return (newpoint[0],(point,newpoint[1][1]))
+
+def closestPoint(point, centriods,K):
+    vector1 = np.array(point)
+    vector1 = np.stack([vector1 for _ in range(K)])
+    vector2 = np.array(centriods)
+    dist = np.sum((vector1 - vector2)**2, axis=1)
+    bestIndex = np.argmin(dist)
+    return bestIndex
 
 def parse_host_names(host_names):
     """Transform host names string to list"""
