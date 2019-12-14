@@ -116,8 +116,8 @@ if __name__ == '__main__':
         text = sc.textFile('/wc_dataset.txt')
         mapped = text.map(lambda x: (x, 1))
         reduced = mapped.reduceByKey(lambda a, b: a + b)
-        # not work: filterdone = reduced.filter(lambda x: x[0] == 'American')
-        filterdone = reduced.filter(lambda x: x[0] != 'American')
+        filterdone = reduced.filter(lambda x: x[0] == 'American')
+        # filterdone = reduced.filter(lambda x: x[0] != 'American')
         take_res = filterdone.take(10)
         take_res = [str(x) for x in take_res]
         print('[take]\n%s' % '\n'.join(take_res))

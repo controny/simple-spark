@@ -17,7 +17,8 @@ def handle(sock_fd, address, datanode, memory):
     print("Connection from : ", address)
     try:
         raw_request = recv_msg(sock_fd)
-        request = str(raw_request, encoding='utf-8')
+        # request = str(raw_request, encoding='utf-8')
+        request = deserialize(raw_request)
         request = request.split()
         print(request)
 
@@ -38,7 +39,7 @@ def handle(sock_fd, address, datanode, memory):
 
         print('response for command [%s]: %s' % (cmd, response))
         if type(response) is not bytes:
-            response = bytes(response, encoding='utf-8')
+            response = serialize(response)
         send_msg(sock_fd, response)
     except BrokenPipeError:
         pass
@@ -136,7 +137,7 @@ class DataNode:
         self.update_progress(memory, blk_no, step)
         return "Load text file successfully~"
 
-    def take(self, memory, blk_no, num, step):
+    def take(self, memory, blk_no, num, step, *args):
         """Take lines from chunk data in memory"""
         print('performing [take] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
@@ -188,7 +189,7 @@ class DataNode:
             job.join()
         # TODO: sometimes a node will produce a list
         all_values = sum(partitions.values(), [])
-        assert isinstance(all_values, list) and all([isinstance(x, tuple) for x in all_values]), partitions.values()[:10]
+        assert isinstance(all_values, list) and all([isinstance(x, tuple) for x in all_values]), type(partitions.values())
         local_res = reduce_by_key(all_values, func)
         # use the buffer to store the result
         buffer['local_reduce'] = local_res
@@ -218,9 +219,9 @@ class DataNode:
             while message != '200':
                 request = "store_reduced_data"
                 print('[store_reduced_data] connect ' + target_host)
-                send_msg(sock, bytes(request, encoding='utf-8'))
+                send_msg(sock, serialize(request))
                 send_msg(sock, serialize(data))
-                message = str(recv_msg(sock), encoding='utf-8')
+                message = deserialize(recv_msg(sock))
             sock.close()
 
         jobs = []
@@ -237,7 +238,8 @@ class DataNode:
             sock = socket.socket()
             sock.connect((host, data_node_port))
             print('[global_reduce_by_key] connect ' + host)
-            send_msg(sock, bytes('global_reduce_by_key', encoding='utf-8'))
+            request = 'global_reduce_by_key'
+            send_msg(sock, serialize(request))
             sock.close()
 
         return '200'
@@ -273,6 +275,7 @@ class DataNode:
     def update_blk_no(self, memory, sock_fd):
         """Rearrange bulk number according to message from client"""
         new_blk_nos = deserialize(recv_msg(sock_fd))
+        print('keys:', new_blk_nos.keys())
         partitions = memory[0]
         old_copy = dict(partitions)
         partitions.clear()
