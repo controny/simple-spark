@@ -28,7 +28,7 @@ class DFSClient:
             cmd = "ls {}".format(dfs_path)
             send_msg(self.name_node_sock, serialize(cmd))
             response_msg = recv_msg(self.name_node_sock)
-            print(str(response_msg, encoding='utf-8'))
+            print(deserialize(response_msg))
         except Exception as e:
             print(e)
         finally:
@@ -53,7 +53,7 @@ class DFSClient:
         fat_pd = recv_msg(self.name_node_sock)
         
         # 打印FAT表，并使用pandas读取
-        fat_pd = str(fat_pd, encoding='utf-8')
+        fat_pd = deserialize(fat_pd)
         print("Fat: \n{}".format(fat_pd))
         fat = pd.read_csv(StringIO(fat_pd))
         
@@ -93,7 +93,7 @@ class DFSClient:
         fat_pd = recv_msg(self.name_node_sock)
         
         # 打印FAT表，并使用pandas读取
-        fat_pd = str(fat_pd, encoding='utf-8')
+        fat_pd = deserialize(fat_pd)
         print("Fat: \n{}".format(fat_pd))
         fat = pd.read_csv(StringIO(fat_pd))
         
@@ -110,7 +110,7 @@ class DFSClient:
             send_msg(data_node_sock, serialize(request))
             time.sleep(0.2)  # 两次传输需要间隔一段时间，避免粘包
             data = recv_msg(data_node_sock)
-            data = str(data, encoding='utf-8')
+            data = deserialize(data)
             fp.write(data)
             data_node_sock.close()
         fp.close()
@@ -124,7 +124,7 @@ class DFSClient:
         fat_pd = recv_msg(self.name_node_sock)
         
         # 打印FAT表，并使用pandas读取
-        fat_pd = str(fat_pd, encoding='utf-8')
+        fat_pd = deserialize(fat_pd)
         print("Fat: \n{}".format(fat_pd))
         fat = pd.read_csv(StringIO(fat_pd))
         
@@ -138,7 +138,7 @@ class DFSClient:
                 request = "rm {}".format(blk_path)
                 send_msg(data_node_sock, serialize(request))
                 response_msg = recv_msg(data_node_sock)
-                print(str(response_msg, encoding='utf-8'))
+                print(deserialize(response_msg))
 
                 data_node_sock.close()
     
@@ -147,7 +147,7 @@ class DFSClient:
         print(request)
         
         send_msg(self.name_node_sock, serialize(request))
-        print(str(recv_msg(self.name_node_sock), encoding='utf-8'))
+        print(deserialize(recv_msg(self.name_node_sock)))
         
         for host in host_list:
             data_node_sock = socket.socket()
@@ -155,7 +155,7 @@ class DFSClient:
 
             request = 'format'
             send_msg(data_node_sock, serialize(request))
-            print(str(recv_msg(data_node_sock), encoding='utf-8'))
+            print(deserialize(recv_msg(data_node_sock)))
             
             data_node_sock.close()
 
@@ -166,7 +166,7 @@ class DFSClient:
 
         send_msg(self.name_node_sock, serialize(request))
         fat_pd = recv_msg(self.name_node_sock)
-        fat_pd = str(fat_pd, encoding='utf-8')
+        fat_pd = deserialize(fat_pd)
         print("Fat: \n{}".format(fat_pd))
         fat_pd = pd.read_csv(StringIO(fat_pd))
 
@@ -196,7 +196,7 @@ class DFSClient:
                     # If not receive any data, continue and try later
                     continue
                 # Parse the local results
-                local_result = pd.read_csv(StringIO(str(response_msg, encoding='utf-8'))).iloc[0]
+                local_result = pd.read_csv(StringIO(deserialize(response_msg))).iloc[0]
                 local_sums.append(local_result['sum'])
                 local_sum_squares.append(local_result['sum_square'])
                 local_counts.append(local_result['count'])
