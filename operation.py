@@ -28,7 +28,7 @@ class Operation:
             worker_sock.connect((host_name, data_node_port))
             request = "clear_memory"
             print('[clear_memory] connect ' + host_name)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            send_msg(worker_sock, serialize(request))
             worker_sock.close()
 
 
@@ -42,7 +42,7 @@ class Transformation(Operation):
             worker_sock.connect((host_name, data_node_port))
             request = "map {} {}".format(blk_no, step)
             print('[map] connect ' + host_name)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            send_msg(worker_sock, serialize(request))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
             worker_sock.close()
@@ -53,7 +53,7 @@ class Transformation(Operation):
             worker_sock.connect((host_name, data_node_port))
             request = "filter_ {} {}".format(blk_no, step)
             print('[filter_] connect ' + host_name)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            send_msg(worker_sock, serialize(request))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
             worker_sock.close()
@@ -66,7 +66,7 @@ class Action(Operation):
         result = []
         # take lines starting from bulk 0
         blk_no = 0
-        # TODO: cannot succeed when blk_no > 0 when reduceByKey is involved
+        print('partition table: %s' % partition_tbl)
         while num > 0 or num == -1:
             host_name = partition_tbl.get(blk_no)
             if host_name is None:
@@ -75,7 +75,8 @@ class Action(Operation):
             worker_sock.connect((host_name, data_node_port))
             request = "take {} {} {}".format(blk_no, num, step)
             print('[take] connect ' + host_name)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            # send_msg(worker_sock, serialize(request))
+            send_msg(worker_sock, serialize(request))
             lines = deserialize(recv_msg(worker_sock))
             worker_sock.close()
 
@@ -101,9 +102,9 @@ class TextFileOp(Transformation):
         manager_sock.connect((name_node_host, name_node_port))
 
         # 1. get FAT from the Manager
-        send_msg(manager_sock, bytes(request, encoding='utf-8'))
+        send_msg(manager_sock, serialize(request))
         fat_pd = recv_msg(manager_sock)
-        fat_pd = str(fat_pd, encoding='utf-8')
+        fat_pd = deserialize(fat_pd)
         print("Fat: \n{}".format(fat_pd))
         fat = pd.read_csv(StringIO(fat_pd))
 
@@ -120,7 +121,7 @@ class TextFileOp(Transformation):
             worker_sock.connect((host_name, data_node_port))
 
             request = "text_file {} {} {}".format(self.file_path, blk_no, step)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            send_msg(worker_sock, serialize(request))
             worker_sock.close()
         print('partition table: %s' % partition_tbl)
         return partition_tbl
@@ -154,7 +155,7 @@ class ReduceByKeyOp(Transformation):
             worker_sock.connect((host_name, data_node_port))
             request = "local_reduce_by_key {}".format(step)
             print('[local_reduce_by_key] connect ' + host_name)
-            send_msg(worker_sock, bytes(request, encoding='utf-8'))
+            send_msg(worker_sock, serialize(request))
             send_msg(worker_sock, serialize(self.func))
             worker_sock.close()
 
@@ -162,15 +163,17 @@ class ReduceByKeyOp(Transformation):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             print('[transfer_reduced_data] connect ' + host_name)
-            send_msg(worker_sock, bytes("transfer_reduced_data", encoding='utf-8'))
-
+            request = 'transfer_reduced_data'
+            send_msg(worker_sock, serialize(request))
             while True:
                 try:
                     received = recv_msg(worker_sock)
                     blk_nos = deserialize(received)
+                    if not isinstance(blk_nos, list):
+                        print('try to get bulk numbers of %s but receive:' % host_name, blk_nos)
+                        continue
+                    print('received blk numbers:', blk_nos)
                     break
-                except pickle.UnpicklingError:
-                    print('try to get bulk numbers of %s but receive:' % host_name, received)
                 except Exception:
                     print('fail to receive sub bulk numbers:')
                     traceback.print_exc()
@@ -190,9 +193,10 @@ class ReduceByKeyOp(Transformation):
             message = ''
             while message != '200':
                 print('[update_blk_no] connect ' + host_name)
-                send_msg(worker_sock, bytes("update_blk_no", encoding='utf-8'))
+                request = 'update_blk_no'
+                send_msg(worker_sock, serialize(request))
                 send_msg(worker_sock, serialize(new_blk_nos))
-                message = str(recv_msg(worker_sock), encoding='utf-8')
+                message = deserialize(recv_msg(worker_sock))
             worker_sock.close()
 
         manager = Manager()
@@ -232,10 +236,10 @@ if __name__ == '__main__':
         partition_table = TextFileOp('/wc_dataset.txt')(0)
         print('[partition table]\n%s' % partition_table)
 
-        MapOp(lambda x: {x: 1})(partition_table, 1)
+        MapOp(lambda x: (x, 1))(partition_table, 1)
         partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
         print('[new partition table]\n%s' % partition_table)
-        FilterOp(lambda x: key_func(x) != 'American')(partition_table, 3)
+        FilterOp(lambda x: key_func(x) == 'American')(partition_table, 3)
         take_res = TakeOp(20)(partition_table, 4)
         take_res = [str(x) for x in take_res]
         print('[take]\n%s' % '\n'.join(take_res))
