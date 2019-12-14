@@ -16,7 +16,6 @@ def handle(sock_fd, address, namenode):
     print("Connection from : ", address)
     try:
         # 获取请求方发送的指令
-        # request = str(recv_msg(sock_fd), encoding='utf-8')
         request = deserialize(recv_msg(sock_fd))
         request = request.split()  # 指令之间使用空白符分割
         print("Request: {}".format(request))

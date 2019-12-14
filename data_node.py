@@ -17,11 +17,9 @@ def handle(sock_fd, address, datanode, memory):
     print("Connection from : ", address)
     try:
         raw_request = recv_msg(sock_fd)
-        # request = str(raw_request, encoding='utf-8')
         request = deserialize(raw_request)
         request = request.split()
         print(request)
-
         cmd = request[0]
 
         try:
@@ -137,11 +135,12 @@ class DataNode:
         self.update_progress(memory, blk_no, step)
         return "Load text file successfully~"
 
-    def take(self, memory, blk_no, num, step, *args):
+    def take(self, memory, blk_no, num, step):
         """Take lines from chunk data in memory"""
         print('performing [take] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         lines = memory[0][blk_no]
+        print('lines:', lines)
         num = int(num)
         if num != -1:
             # -1 means take all data
@@ -187,9 +186,11 @@ class DataNode:
         # wait for all processes to finish
         for job in jobs:
             job.join()
-        # TODO: sometimes a node will produce a list
+
         all_values = sum(partitions.values(), [])
-        assert isinstance(all_values, list) and all([isinstance(x, tuple) for x in all_values]), type(partitions.values())
+        assert isinstance(all_values, list), type(all_values)
+        # TODO: sometimes x is `str`
+        assert all([isinstance(x, tuple) for x in all_values]), [type(x) for x in all_values][:10]
         local_res = reduce_by_key(all_values, func)
         # use the buffer to store the result
         buffer['local_reduce'] = local_res
@@ -262,9 +263,11 @@ class DataNode:
         if buffer['data_flag'] == 0:
             global_reduce = memory[3]
             result = reduce_by_key(global_reduce, deserialize(buffer['func']))
+            # clear original middle result
+            global_reduce[:] = []
             # make sure not to reassign a normal list to memory
             for idx, element in enumerate(result):
-                global_reduce[idx] = element
+                global_reduce.append(element)
             self.update_memory_with_new_partitions(memory)
             # send new bulk numbers back to client
             send_msg(buffer['sock_fd'], serialize(memory[0].keys()))
@@ -282,6 +285,12 @@ class DataNode:
         for k, v in old_copy.items():
             new_key = new_blk_nos[k]
             partitions[new_key] = v
+
+        # remember to update progress
+        step = memory[2]['step']
+        for blk_no in partitions.keys():
+            self.update_progress(memory, blk_no, step)
+
         return '200'
 
     def hash_key(self, element, num_reducers):
@@ -310,10 +319,6 @@ class DataNode:
 
         partitions.clear()
         partitions.update(self.split_data_into_bulks(middle_results))
-
-        step = buffer['step']
-        for blk_no in partitions.keys():
-            self.update_progress(memory, blk_no, step)
 
     def split_data_into_bulks(self, data):
         res = {}

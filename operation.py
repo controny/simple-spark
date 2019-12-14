@@ -66,7 +66,7 @@ class Action(Operation):
         result = []
         # take lines starting from bulk 0
         blk_no = 0
-        # TODO: cannot succeed when blk_no > 0 when reduceByKey is involved
+        print('partition table: %s' % partition_tbl)
         while num > 0 or num == -1:
             host_name = partition_tbl.get(blk_no)
             if host_name is None:
@@ -74,7 +74,6 @@ class Action(Operation):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "take {} {} {}".format(blk_no, num, step)
-            # request = "take 1 4 0 0 0 0 0 "
             print('[take] connect ' + host_name)
             # send_msg(worker_sock, serialize(request))
             send_msg(worker_sock, serialize(request))
@@ -166,7 +165,6 @@ class ReduceByKeyOp(Transformation):
             print('[transfer_reduced_data] connect ' + host_name)
             request = 'transfer_reduced_data'
             send_msg(worker_sock, serialize(request))
-
             while True:
                 try:
                     received = recv_msg(worker_sock)
@@ -238,10 +236,10 @@ if __name__ == '__main__':
         partition_table = TextFileOp('/wc_dataset.txt')(0)
         print('[partition table]\n%s' % partition_table)
 
-        MapOp(lambda x: {x: 1})(partition_table, 1)
+        MapOp(lambda x: (x, 1))(partition_table, 1)
         partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
         print('[new partition table]\n%s' % partition_table)
-        FilterOp(lambda x: key_func(x) != 'American')(partition_table, 3)
+        FilterOp(lambda x: key_func(x) == 'American')(partition_table, 3)
         take_res = TakeOp(20)(partition_table, 4)
         take_res = [str(x) for x in take_res]
         print('[take]\n%s' % '\n'.join(take_res))
