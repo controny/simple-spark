@@ -117,7 +117,7 @@ if __name__ == '__main__':
         while (times<100):
             sc = SparkContext()
             text = sc.textFile('/test.txt')
-            mapped = text.map(lambda x: (x, 1))
+            mapped = text.map(lambda x: [x, 1])
             reduced = mapped.reduceByKey(lambda a, b: a + b)
             # filterdone = reduced.filter(lambda x: x[0] == 'American')
             take_res = reduced.take(30)
@@ -126,6 +126,7 @@ if __name__ == '__main__':
             print('[take]\n%s' % '\n'.join(take_res))
             if temp != take_res and times != 0:
                 print("it's diff in times : {} ".format(times))
+                print('[last time]\n%s' % '\n'.join(temp))
                 print('[this time]\n%s' % '\n'.join(take_res))
                 break 
             temp = take_res

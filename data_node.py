@@ -35,7 +35,7 @@ def handle(sock_fd, address, datanode, memory):
             traceback.print_exc()
             response = str(e)
 
-        # print('response for command [%s]: %s' % (cmd, response))
+        print('response for command [%s]: %s' % (cmd, response))
         if type(response) is not bytes:
             response = serialize(response)
         send_msg(sock_fd, response)
@@ -154,8 +154,6 @@ class DataNode:
         self.check_progress(memory, blk_no, step)
         func = deserialize(recv_msg(sock_fd))
         memory[0][blk_no] = list(map(func, memory[0][blk_no]))
-        assert all([isinstance(x, tuple) for x in memory[0][blk_no]]),\
-            'mapped: %s' % str([type(x) for x in memory[0][blk_no]][:10])
         self.update_progress(memory, blk_no, step)
         return "Map data successfully~"
 
@@ -329,7 +327,7 @@ class DataNode:
                 sub_memory[:] = []
             else:
                 sub_memory.clear()
-        return "Clear memory successfully~"
+        return "200"
 
     def update_memory_with_new_partitions(self, memory):
         """Substitute original partition table with reduced results"""
