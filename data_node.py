@@ -141,7 +141,6 @@ class DataNode:
         print('performing [take] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         lines = memory[0][blk_no]
-        # print('lines:', lines)
         num = int(num)
         if num != -1:
             # -1 means take all data
@@ -315,6 +314,7 @@ class DataNode:
         if isinstance(key,str):
             key = key.encode('utf-8')
         return int(hashlib.sha1(key).hexdigest(), 16) % num_reducers
+
     def filter_(self, memory, sock_fd, blk_no, step):
         print('performing [filter] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
@@ -342,10 +342,11 @@ class DataNode:
         res = {}
         blk_no = 0
         split_start = 0
-        for i in range(len(data)):
+        for i in range(1, len(data)+1):
             cur_blk = data[split_start:i]
             next_blk = data[split_start:i+1]
-            if sys.getsizeof(cur_blk) < dfs_blk_size < sys.getsizeof(next_blk) or i == len(data)-1:
+            # use length of string to denote data size
+            if len(str(cur_blk)) < dfs_blk_size < len(str(next_blk)) or i == len(data):
                 res[str(blk_no)] = cur_blk
                 split_start = i
                 blk_no += 1
