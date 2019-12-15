@@ -118,8 +118,10 @@ if __name__ == '__main__':
         reduced = mapped.reduceByKey(lambda a, b: a + b)
         filterdone = reduced.filter(lambda x: x[0] == 'American')
         take_res = filterdone.take(10)
-        take_res = [str(x) for x in take_res]
-        print('[take]\n%s' % '\n'.join(take_res))
+        print('[take]\n%s' % '\n'.join([str(x) for x in take_res]))
+        if take_res[0][0] != 'American' or take_res[0][1] != 20:
+            while True:
+                pass
     finally:
         # clear memory of all nodes whatever
         Operation.clear_memory()
