@@ -153,7 +153,9 @@ class ReduceByKeyOp(Transformation):
         def handle(host_name, partition_tbl, cur_blk_no, lock):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
-            request = "local_reduce_by_key {}".format(step)
+            blk_nos = ','.join(blk_nos_on_each_host[host_name]) + ','
+            request = "local_reduce_by_key {} {}".format(blk_nos, step)
+            print('request:', request)
             print('[local_reduce_by_key] connect ' + host_name)
             send_msg(worker_sock, serialize(request))
             send_msg(worker_sock, serialize(self.func))
@@ -204,6 +206,10 @@ class ReduceByKeyOp(Transformation):
         cur_blk_no = manager.Value('i', 0)
         lock = manager.Lock()
         jobs = []
+        blk_nos_on_each_host = {host:[] for host in host_list}
+        for blk_no, host in partition_tbl.items():
+            blk_no = str(blk_no)
+            blk_nos_on_each_host[host].append(blk_no)
         for host_name in host_list:
             process = Process(target=handle, args=(host_name, new_partition_tbl, cur_blk_no, lock))
             process.start()
