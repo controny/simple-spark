@@ -45,20 +45,22 @@ class RDD:
         self.childs.append(child)
         return child
 
-    def take(self, num):
-        operation=TakeOp(num)
+    def collect(self):
+        operation = CollectOp()
         child = RDD(parent=self, operation=operation)
         self.childs.append(child)
-        if isinstance(operation,Action):
+        if isinstance(operation, Action):
             value = child.execute()
-        return value    
-    # def cache(self):
-    #     child = RDD(parent=self, operation="cache")
-    #     self.childs.append(child)
-    #     if type(operation) == Action:
-    #         self.execute()
-    #     return child
-    
+        return value
+
+    def take(self, num):
+        operation = TakeOp(num)
+        child = RDD(parent=self, operation=operation)
+        self.childs.append(child)
+        if isinstance(operation, Action):
+            value = child.execute()
+        return value
+
     def textFile(self, address):
         child = RDD(parent=self, operation=TextFileOp(address))
         self.childs.append(child)
@@ -116,11 +118,12 @@ if __name__ == '__main__':
         temp = []
         while (times<100):
             sc = SparkContext()
-            text = sc.textFile('/test.txt')
+            text = sc.textFile('/wc_dataset.txt')
             mapped = text.map(lambda x: [x, 1])
             reduced = mapped.reduceByKey(lambda a, b: a + b)
-            # filterdone = reduced.filter(lambda x: x[0] == 'American')
-            take_res = reduced.take(30)
+            filterdone = reduced.filter(lambda x: x[0].startswith('a'))
+            # take_res = reduced.take(30)
+            take_res = filterdone.collect()
             take_res = [str(x) for x in take_res]
             take_res.sort()
             print('[take]\n%s' % '\n'.join(take_res))
