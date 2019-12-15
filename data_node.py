@@ -64,7 +64,8 @@ class DataNode:
         memory_progress = manager.dict()
         memory_buffer = manager.dict()
         memory_middle_result = manager.list()
-        memory = [memory_partitions, memory_progress, memory_buffer, memory_middle_result]
+        memory_lock = manager.Lock()
+        memory = [memory_partitions, memory_progress, memory_buffer, memory_middle_result, memory_lock]
         try:
             # 监听端口
             listen_fd.bind(("0.0.0.0", data_node_port))
@@ -154,6 +155,8 @@ class DataNode:
         self.check_progress(memory, blk_no, step)
         func = deserialize(recv_msg(sock_fd))
         memory[0][blk_no] = list(map(func, memory[0][blk_no]))
+        assert all([isinstance(x, tuple) for x in memory[0][blk_no]]),\
+            'mapped: %s' % str([type(x) for x in memory[0][blk_no]][:10])
         self.update_progress(memory, blk_no, step)
         return "Map data successfully~"
 
@@ -168,18 +171,28 @@ class DataNode:
         func = deserialize(raw_func)
         # store some variables for later usage
         buffer = memory[2]
-        buffer['func'] = raw_func
-        buffer['step'] = step
-        buffer['data_flag'] = len(host_list)
+        with LockContext(memory):
+            buffer['func'] = raw_func
+            buffer['step'] = step
+            buffer['data_flag'] = len(host_list)
         jobs = []
 
-        def handle(blk_no):
+        for blk_no, partition in partitions.items():
+            print('original partition %s:' % blk_no, [x for x in partition[:10]])
+            # TODO
+            test = [x for x in partition if (isinstance(x, tuple) and x[0] == 'American') or (isinstance(x, str) and x == 'American')]
+            print('original partition test American %s:' % blk_no, test)
+
+        def handle(blk_no, memory):
             self.check_progress(memory, blk_no, step)
-            partitions[blk_no] = reduce_by_key(partitions[blk_no], func)
+            print('bulk %s:' % blk_no, [x for x in partitions[blk_no][:10]])
+            with LockContext(memory):
+                partitions[blk_no] = reduce_by_key(partitions[blk_no], func)
+            print('reduced bulk %s:' % blk_no, [x for x in partitions[blk_no][:10]])
             print('reduce blk', blk_no)
 
         for blk_no in partitions.keys():
-            process = Process(target=handle, args=blk_no)
+            process = Process(target=handle, args=(blk_no, memory))
             process.start()
             jobs.append(process)
 
@@ -187,34 +200,49 @@ class DataNode:
         for job in jobs:
             job.join()
 
+        for blk_no, partition in partitions.items():
+            print('reduced partition %s:' % blk_no, [x for x in partition[:10]])
+            # TODO
+            test = [x for x in partition if x[0] == 'American']
+            print('reduced partition test American %s:' % blk_no, test)
         all_values = sum(partitions.values(), [])
         assert isinstance(all_values, list), type(all_values)
-        # TODO: sometimes x is `str`
-        assert all([isinstance(x, tuple) for x in all_values]), [type(x) for x in all_values][:10]
+        # TODO: sometimes x is `str`, maybe caused by incomplete computing dependency
+        assert all([isinstance(x, tuple) for x in all_values]),\
+            [x for x in all_values if not isinstance(x, tuple)][:10]
         local_res = reduce_by_key(all_values, func)
         # use the buffer to store the result
-        buffer['local_reduce'] = local_res
+        with LockContext(memory):
+            buffer['local_reduce'] = local_res
+        # TODO
+        test = [x for x in local_res if x[0] == 'American']
+        print('local test American', test)
+        assert len(test) <= 1, test
 
         return "Local reduce by key successfully~"
 
     def transfer_reduced_data(self, memory, sock_fd):
         """Transfer locally-reduced data to the corresponding hosts defined by hash function"""
         buffer = memory[2]
-        buffer['sock_fd'] = sock_fd
+        with LockContext(memory):
+            buffer['sock_fd'] = sock_fd
         # wait for local reduce to finish
-        while memory[2].get('local_reduce') is None:
+        while buffer.get('local_reduce') is None:
             # print('waiting for local reduce to finish')
             time.sleep(0.05)
 
         num_reducer = len(host_list)
         # pack the elements of the same target host and send together
         to_transfer = {host: [] for host in host_list}
-        for element in memory[2]['local_reduce']:
+        for element in buffer['local_reduce']:
             target_host = host_list[self.hash_key(element, num_reducer)]
             to_transfer[target_host].append(element)
 
         def handle(target_host, data):
             sock = socket.socket()
+            # TODO
+            test = [x for x in data if x[0] == 'American']
+            print('to send {} American'.format(target_host), test)
             sock.connect((target_host, data_node_port))
             message = ''
             while message != '200':
@@ -248,7 +276,8 @@ class DataNode:
     def store_reduced_data(self, memory, sock_fd):
         """Store received reduced data in the buffer of memory"""
         data = deserialize(recv_msg(sock_fd))
-        memory[3].extend(data)
+        with LockContext(memory):
+            memory[3].extend(data)
         return '200'
 
     def global_reduce_by_key(self, memory):
@@ -257,8 +286,10 @@ class DataNode:
         2. Combine all received data, perform reducing again and finally update partition table
         """
         buffer = memory[2]
-        buffer['data_flag'] -= 1
-        print('data_flag:', buffer['data_flag'])
+        # require lock to synchronize
+        with LockContext(memory):
+            buffer['data_flag'] -= 1
+            print('data_flag:', buffer['data_flag'])
 
         if buffer['data_flag'] == 0:
             global_reduce = memory[3]
@@ -268,6 +299,10 @@ class DataNode:
             # make sure not to reassign a normal list to memory
             for idx, element in enumerate(result):
                 global_reduce.append(element)
+            # TODO:
+            test = [x for x in global_reduce if x[0] == 'American']
+            print('global test American', test)
+            assert len(test) <= 1, test
             self.update_memory_with_new_partitions(memory)
             # send new bulk numbers back to client
             send_msg(buffer['sock_fd'], serialize(memory[0].keys()))
@@ -307,7 +342,7 @@ class DataNode:
         return "filter data successfully~"
     
     def clear_memory(self, memory):
-        for sub_memory in memory:
+        for sub_memory in memory[:4]:
             if isinstance(sub_memory, managers.ListProxy):
                 sub_memory[:] = []
             else:
@@ -316,7 +351,7 @@ class DataNode:
 
     def update_memory_with_new_partitions(self, memory):
         """Substitute original partition table with reduced results"""
-        partitions, progress, buffer, middle_results = memory
+        partitions, progress, buffer, middle_results = memory[:4]
 
         partitions.clear()
         partitions.update(self.split_data_into_bulks(middle_results))
@@ -335,7 +370,8 @@ class DataNode:
         return res
 
     def update_progress(self, memory, blk_no, step):
-        memory[1][blk_no] = int(step)
+        with LockContext(memory):
+            memory[1][blk_no] = int(step)
         print('updated progress: ', memory[1])
 
     def check_progress(self, memory, blk_no, step):

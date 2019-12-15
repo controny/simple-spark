@@ -100,3 +100,14 @@ def recv_msg(sock):
             part = sock.recv(min(BUF_SIZE, data_size-len(data)))
             data.extend(part)
     return data
+
+
+class LockContext:
+    def __init__(self, memory):
+        self.lock = memory[4]
+
+    def __enter__(self):
+        self.lock.acquire()
+
+    def __exit__(self, type, value, traceback):
+        self.lock.release()
