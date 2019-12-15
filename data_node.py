@@ -19,7 +19,7 @@ def handle(sock_fd, address, datanode, memory):
         raw_request = recv_msg(sock_fd)
         request = deserialize(raw_request)
         request = request.split()
-        logger.debug(request)
+        logger.info(request)
         cmd = request[0]
 
         try:
