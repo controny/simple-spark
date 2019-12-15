@@ -35,7 +35,7 @@ def handle(sock_fd, address, datanode, memory):
             traceback.print_exc()
             response = str(e)
 
-        print('response for command [%s]: %s' % (cmd, response))
+        # print('response for command [%s]: %s' % (cmd, response))
         if type(response) is not bytes:
             response = serialize(response)
         send_msg(sock_fd, response)
@@ -140,7 +140,7 @@ class DataNode:
         print('performing [take] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         lines = memory[0][blk_no]
-        print('lines:', lines)
+        # print('lines:', lines)
         num = int(num)
         if num != -1:
             # -1 means take all data
@@ -295,8 +295,9 @@ class DataNode:
 
     def hash_key(self, element, num_reducers):
         key = key_func(element)
-        return int(hashlib.sha1(key.encode('utf-8')).hexdigest(), 16) % num_reducers
-
+        if isinstance(key,str):
+            key = key.encode('utf-8')
+        return int(hashlib.sha1(key).hexdigest(), 16) % num_reducers
     def filter_(self, memory, sock_fd, blk_no, step):
         print('performing [filter] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)

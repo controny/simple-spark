@@ -24,7 +24,10 @@ if __name__ == '__main__':
         kpoints = random_gen(K, points.filter(lambda x: random.random()<0.5).take(20))
         while (tempDist > convergeDist):
             closest = points.map(lambda points, kpoints=kpoints,K=K:(closestPoint(points,kpoints,K),(points,1)))
+            # print("here KKKKKK",len(closest.take(20)))
+            print(closest.map(lambda x: x[0]).take(20))
             pointStats = closest.reduceByKey(lambda x,y:addPoints(x,y))
+            print("Here",len(pointStats.take(K)))
             newPoints = pointStats.map(lambda newpoint:average(newpoint)).take(20)
             newPoints = sorted(newPoints, key=lambda x: x[0])
             tempDist = 0.0
