@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 from uniqueID import *
 from operation import *
+import logging
+from utils import *
 
 class RDD:
 # To do list:
@@ -126,11 +128,10 @@ if __name__ == '__main__':
             take_res = filterdone.collect()
             take_res = [str(x) for x in take_res]
             take_res.sort()
-            print('[take]\n%s' % '\n'.join(take_res))
+            logger.debug('[take]\n%s' % '\n'.join(take_res))
             if temp != take_res and times != 0:
-                print("it's diff in times : {} ".format(times))
-                print('[last time]\n%s' % '\n'.join(temp))
-                print('[this time]\n%s' % '\n'.join(take_res))
+                logger.info("it's diff in times : {} ".format(times))
+                logger.info('[this time]\n%s' % '\n'.join(take_res))
                 break 
             temp = take_res
             times += 1

@@ -3,6 +3,7 @@ common.py
 dfs/
 test/
 test2.txt
+result.txt
 
 # PyCharm configuration directory
 .idea/

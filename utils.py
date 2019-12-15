@@ -6,6 +6,22 @@ from functools import reduce
 from itertools import groupby
 import random
 import numpy as np
+import logging
+import sys
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--debug', action='store_true')
+args, unknown = parser.parse_known_args()
+
+if args.debug:
+    level = logging.DEBUG
+else:
+    level = logging.INFO
+logger = logging.getLogger()
+logger.setLevel(level)
+handler = logging.StreamHandler(sys.stdout)
+logger.addHandler(handler)
 
 def random_gen(k, points):
     random.shuffle(points)

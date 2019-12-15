@@ -14,12 +14,12 @@ from utils import *
 
 
 def handle(sock_fd, address, datanode, memory):
-    print("Connection from : ", address)
+    logger.debug("Connection from : {}".format(address))
     try:
         raw_request = recv_msg(sock_fd)
         request = deserialize(raw_request)
         request = request.split()
-        print(request)
+        logger.info(request)
         cmd = request[0]
 
         try:
@@ -35,7 +35,7 @@ def handle(sock_fd, address, datanode, memory):
             traceback.print_exc()
             response = str(e)
 
-        print('response for command [%s]: %s' % (cmd, response))
+        logger.debug('response for command [%s]: %s' % (cmd, response))
         if type(response) is not bytes:
             response = serialize(response)
         send_msg(sock_fd, response)
@@ -70,11 +70,11 @@ class DataNode:
             # 监听端口
             listen_fd.bind(("0.0.0.0", data_node_port))
             listen_fd.listen(5)
-            print('data node listening at port %s' % data_node_port)
+            logger.debug('data node listening at port %s' % data_node_port)
             while True:
                 # 等待连接，连接后返回通信用的套接字
                 sock_fd, addr = listen_fd.accept()
-                print("Receive connection request from {}".format(addr))
+                logger.debug("Receive connection request from {}".format(addr))
 
                 process = Process(target=handle, args=(sock_fd, addr, self, memory))
                 process.start()
@@ -98,7 +98,7 @@ class DataNode:
     def store(self, sock_fd, dfs_path):
         # 从Client获取块数据
         chunk_data = recv_msg(sock_fd)
-        print('receive data with size = %d' % len(chunk_data))
+        logger.debug('receive data with size = %d' % len(chunk_data))
         # 本地路径
         local_path = dfs2local_path(dfs_path)
         # 若目录不存在则创建新目录
@@ -127,7 +127,7 @@ class DataNode:
 
     def text_file(self, memory, dfs_base_path, blk_no, step):
         """Load file into memory in the form of lines"""
-        print('performing [text_file] operation for bulk ' + blk_no)
+        logger.debug('performing [text_file] operation for bulk ' + blk_no)
         dfs_path = '%s.blk%s' % (dfs_base_path, blk_no)
         local_path = dfs2local_path(dfs_path)
         with open(local_path) as f:
@@ -138,7 +138,7 @@ class DataNode:
 
     def take(self, memory, blk_no, num, step):
         """Take lines from chunk data in memory"""
-        print('performing [take] operation for bulk ' + blk_no)
+        logger.debug('performing [take] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         lines = memory[0][blk_no]
         num = int(num)
@@ -150,7 +150,7 @@ class DataNode:
         return serialized
 
     def map(self, memory, sock_fd, blk_no, step):
-        print('performing [map] operation for bulk ' + blk_no)
+        logger.debug('performing [map] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         func = deserialize(recv_msg(sock_fd))
         memory[0][blk_no] = list(map(func, memory[0][blk_no]))
@@ -162,7 +162,7 @@ class DataNode:
         1. Reduce in each bulk;
         2. Reduce all bulks in this machine
         """
-        print('performing [local_reduce_by_key] operation in step %s' % step)
+        logger.debug('performing [local_reduce_by_key] operation in step %s' % step)
         partitions = memory[0]
         raw_func = recv_msg(sock_fd)
         func = deserialize(raw_func)
@@ -174,7 +174,7 @@ class DataNode:
         jobs = []
 
         def handle(blk_no, memory, step, func):
-            print('reduce on bulk %s' % blk_no)
+            logger.debug('reduce on bulk %s' % blk_no)
             self.check_progress(memory, blk_no, step)
             partitions = memory[0]
             with LockContext(memory):
@@ -183,7 +183,7 @@ class DataNode:
         # note that some bulks has not been loaded yet!!!
         # so we cannot access keys from `partitions`
         blk_nos = list(filter(None, blk_nos.split(',')))
-        print('blk_nos:', blk_nos)
+        logger.debug('blk_nos: {}'.format(blk_nos))
         for blk_no in blk_nos:
             process = Process(target=handle, args=(blk_no, memory, step, func))
             process.start()
@@ -211,7 +211,7 @@ class DataNode:
             buffer['sock_fd'] = sock_fd
         # wait for local reduce to finish
         while buffer.get('local_reduce') is None:
-            # print('waiting for local reduce to finish')
+            # logger.debug('waiting for local reduce to finish')
             time.sleep(0.05)
 
         num_reducer = len(host_list)
@@ -227,7 +227,7 @@ class DataNode:
             message = ''
             while message != '200':
                 request = "store_reduced_data"
-                print('[store_reduced_data] connect ' + target_host)
+                logger.debug('[store_reduced_data] connect ' + target_host)
                 send_msg(sock, serialize(request))
                 send_msg(sock, serialize(data))
                 message = deserialize(recv_msg(sock))
@@ -246,7 +246,7 @@ class DataNode:
         for host in host_list:
             sock = socket.socket()
             sock.connect((host, data_node_port))
-            print('[global_reduce_by_key] connect ' + host)
+            logger.debug('[global_reduce_by_key] connect ' + host)
             request = 'global_reduce_by_key'
             send_msg(sock, serialize(request))
             sock.close()
@@ -272,7 +272,7 @@ class DataNode:
                 buffer['data_flag'] = len(host_list)-1
             else:
                 buffer['data_flag'] -= 1
-            print('data_flag:', buffer['data_flag'])
+            logger.debug('data_flag: {}'.format(buffer['data_flag']))
 
         if buffer['data_flag'] == 0:
             global_reduce = memory[3]
@@ -292,7 +292,7 @@ class DataNode:
     def update_blk_no(self, memory, sock_fd):
         """Rearrange bulk number according to message from client"""
         new_blk_nos = deserialize(recv_msg(sock_fd))
-        print('keys:', new_blk_nos.keys())
+        logger.debug('keys: {}'.format(new_blk_nos.keys()))
         partitions = memory[0]
         old_copy = dict(partitions)
         partitions.clear()
@@ -314,7 +314,7 @@ class DataNode:
         return int(hashlib.sha1(key).hexdigest(), 16) % num_reducers
 
     def filter_(self, memory, sock_fd, blk_no, step):
-        print('performing [filter] operation for bulk ' + blk_no)
+        logger.debug('performing [filter] operation for bulk ' + blk_no)
         self.check_progress(memory, blk_no, step)
         func = deserialize(recv_msg(sock_fd))
         memory[0][blk_no] = list(filter(func, memory[0][blk_no]))
@@ -353,16 +353,16 @@ class DataNode:
     def update_progress(self, memory, blk_no, step):
         with LockContext(memory):
             memory[1][blk_no] = int(step)
-        print('updated progress: ', memory[1])
+        logger.debug('updated progress: {} '.format(memory[1]))
 
     def check_progress(self, memory, blk_no, step):
-        print('check progress: ', memory[1])
+        logger.debug('check progress: {}'.format(memory[1]))
         memory_progress = memory[1]
         # The operation must wait when
         # 1. The bulk has not been loaded
         # 2. The current progress of the bulk >= step-1
         while memory_progress.get(blk_no) is None or memory_progress[blk_no] < int(step)-1:
-            # print('blk %s: waiting for the preceding operations to finish' % blk_no)
+            # logger.debug('blk %s: waiting for the preceding operations to finish' % blk_no)
             time.sleep(0.05)
 
 # 创建DataNode对象并启动

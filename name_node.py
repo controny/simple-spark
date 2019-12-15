@@ -13,12 +13,12 @@ from utils import *
 
 
 def handle(sock_fd, address, namenode):
-    print("Connection from : ", address)
+    logger.debug("Connection from : {}".format(address))
     try:
         # 获取请求方发送的指令
         request = deserialize(recv_msg(sock_fd))
         request = request.split()  # 指令之间使用空白符分割
-        print("Request: {}".format(request))
+        logger.debug("Request: {}".format(request))
 
         cmd = request[0]  # 指令第一个为指令类型
 
@@ -40,7 +40,7 @@ def handle(sock_fd, address, namenode):
         else:  # 其他位置指令
             response = "Undefined command: " + " ".join(request)
 
-        print("Response: {}".format(response))
+        logger.debug("Response: {}".format(response))
         send_msg(sock_fd, serialize(response))
     except IndexError:
         # Ignore empty request
@@ -62,11 +62,11 @@ class NameNode:
             # 监听端口
             listen_fd.bind(("0.0.0.0", name_node_port))
             listen_fd.listen(5)
-            print("Name node listening at port %s" % name_node_port)
+            logger.debug("Name node listening at port %s" % name_node_port)
             while True:
                 # 等待连接，连接后返回通信用的套接字
                 sock_fd, addr = listen_fd.accept()
-                print("connected by {}".format(addr))
+                logger.debug("connected by {}".format(addr))
 
                 process = Process(target=handle, args=(sock_fd, addr, self))
                 process.start()
@@ -99,7 +99,7 @@ class NameNode:
         response = pd.read_csv(local_path)
         died_hosts = self.get_died_hosts()
         if len(died_hosts) != 0:
-            print('Died hosts: %s' % died_hosts)
+            logger.debug('Died hosts: %s' % died_hosts)
             # Delete those died hosts in the FAT to be returned
             for idx, row in response.iterrows():
                 for host in died_hosts:
@@ -114,7 +114,7 @@ class NameNode:
             num_replication = min(dfs_replication, len(host_list))  # in case that the number of hosts is less
             host_names = np.random.choice(host_list, size=num_replication, replace=False)
             host_names_str = ','.join(host_names)
-            print('host name', host_names_str)
+            logger.debug('host name {}'.format(host_names_str))
             data_pd.loc[i] = [blk_no, host_names_str]
         
         # 获取本地路径
