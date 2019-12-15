@@ -8,8 +8,18 @@ import random
 import numpy as np
 import logging
 import sys
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--debug', action='store_true')
+args, unknown = parser.parse_known_args()
+
+if args.debug:
+    level = logging.DEBUG
+else:
+    level = logging.INFO
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(level)
 handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 

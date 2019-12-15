@@ -14,8 +14,6 @@ from utils import *
 from common import *
 import logging
 
-# TODO: let each node to process a batch of bulks?
-
 class Operation:
     def __call__(self, *args, **kwargs):
         raise NotImplementedError('Subclasses of Operation must override __call__()!')
@@ -23,13 +21,26 @@ class Operation:
     @staticmethod
     def clear_memory():
         """Clear memory of every nodes after performing an action"""
-        for host_name in host_list:
+        def handle(host_name):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "clear_memory"
-            logger.debug('[clear_memory] connect ' + host_name)
-            send_msg(worker_sock, serialize(request))
+            # make sure the operation is done
+            message = ''
+            while message != '200':
+                logger.debug('[clear_memory] connect ' + host_name)
+                send_msg(worker_sock, serialize(request))
+                message = deserialize(recv_msg(worker_sock))
             worker_sock.close()
+
+        jobs = []
+        for host_name in host_list:
+            process = Process(target=handle, args=[host_name])
+            process.start()
+            jobs.append(process)
+
+        for job in jobs:
+            job.join()
 
 
 class Transformation(Operation):
