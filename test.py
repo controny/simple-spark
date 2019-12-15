@@ -18,6 +18,7 @@ if __name__ == '__main__':
         tempDist = 100000
         sc = SparkContext()
         textfile = sc.textFile("/wc.txt")
+        
         line = textfile.map(lambda line: line.split(" "))
         fields = line.map(lambda fields:[float(x) for x in fields[1:]])
         points  = fields.filter(lambda point: any(point))

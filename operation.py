@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from utils import *
 from common import *
-
+import logging
 
 # TODO: let each node to process a batch of bulks?
 
@@ -27,7 +27,7 @@ class Operation:
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "clear_memory"
-            print('[clear_memory] connect ' + host_name)
+            logger.debug('[clear_memory] connect ' + host_name)
             send_msg(worker_sock, serialize(request))
             worker_sock.close()
 
@@ -41,7 +41,7 @@ class Transformation(Operation):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "map {} {}".format(blk_no, step)
-            print('[map] connect ' + host_name)
+            logger.debug('[map] connect ' + host_name)
             send_msg(worker_sock, serialize(request))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
@@ -52,7 +52,7 @@ class Transformation(Operation):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "filter_ {} {}".format(blk_no, step)
-            print('[filter_] connect ' + host_name)
+            logger.debug('[filter_] connect ' + host_name)
             send_msg(worker_sock, serialize(request))
             time.sleep(0.1)
             send_msg(worker_sock, serialize(self.func))
@@ -66,7 +66,7 @@ class Action(Operation):
         result = []
         # take lines starting from bulk 0
         blk_no = 0
-        print('partition table: %s' % partition_tbl)
+        logger.debug('partition table: %s' % partition_tbl)
         while num > 0 or num == -1:
             host_name = partition_tbl.get(blk_no)
             if host_name is None:
@@ -74,7 +74,7 @@ class Action(Operation):
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
             request = "take {} {} {}".format(blk_no, num, step)
-            print('[take] connect ' + host_name)
+            logger.debug('[take] connect ' + host_name)
             # send_msg(worker_sock, serialize(request))
             send_msg(worker_sock, serialize(request))
             lines = deserialize(recv_msg(worker_sock))
@@ -96,7 +96,7 @@ class TextFileOp(Transformation):
     def __call__(self, step, *args, **kwargs):
         """Load file from DFS and return the partition table"""
         request = "get_fat_item {}".format(self.file_path)
-        print("Request: {}".format(request))
+        logger.debug("Request: {}".format(request))
 
         manager_sock = socket.socket()
         manager_sock.connect((name_node_host, name_node_port))
@@ -105,7 +105,7 @@ class TextFileOp(Transformation):
         send_msg(manager_sock, serialize(request))
         fat_pd = recv_msg(manager_sock)
         fat_pd = deserialize(fat_pd)
-        print("Fat: \n{}".format(fat_pd))
+        logger.debug("Fat: \n{}".format(fat_pd))
         fat = pd.read_csv(StringIO(fat_pd))
 
         # 2. let workers to load files into memory
@@ -123,7 +123,7 @@ class TextFileOp(Transformation):
             request = "text_file {} {} {}".format(self.file_path, blk_no, step)
             send_msg(worker_sock, serialize(request))
             worker_sock.close()
-        print('partition table: %s' % partition_tbl)
+        logger.debug('partition table: %s' % partition_tbl)
         return partition_tbl
 
 
@@ -155,8 +155,8 @@ class ReduceByKeyOp(Transformation):
             worker_sock.connect((host_name, data_node_port))
             blk_nos = ','.join(blk_nos_on_each_host[host_name]) + ','
             request = "local_reduce_by_key {} {}".format(blk_nos, step)
-            print('request:', request)
-            print('[local_reduce_by_key] connect ' + host_name)
+            logger.debug('request:', request)
+            logger.debug('[local_reduce_by_key] connect ' + host_name)
             send_msg(worker_sock, serialize(request))
             send_msg(worker_sock, serialize(self.func))
             worker_sock.close()
@@ -164,7 +164,7 @@ class ReduceByKeyOp(Transformation):
             # must set a new socket for another request
             worker_sock = socket.socket()
             worker_sock.connect((host_name, data_node_port))
-            print('[transfer_reduced_data] connect ' + host_name)
+            logger.debug('[transfer_reduced_data] connect ' + host_name)
             request = 'transfer_reduced_data'
             send_msg(worker_sock, serialize(request))
             while True:
@@ -172,13 +172,13 @@ class ReduceByKeyOp(Transformation):
                     received = recv_msg(worker_sock)
                     blk_nos = deserialize(received)
                     if not isinstance(blk_nos, list):
-                        print('try to get bulk numbers of %s but receive:' % host_name, blk_nos)
+                        logger.debug('try to get bulk numbers of %s but receive:' % host_name, blk_nos)
                         continue
-                    print('received blk numbers:', blk_nos)
+                    logger.debug('received blk numbers:', blk_nos)
                     break
                 except Exception:
-                    print('fail to receive sub bulk numbers:')
-                    traceback.print_exc()
+                    logger.debug('fail to receive sub bulk numbers:')
+                    traceback.logger.debug_exc()
                     pass
             worker_sock.close()
 
@@ -194,7 +194,7 @@ class ReduceByKeyOp(Transformation):
                 lock.release()
             message = ''
             while message != '200':
-                print('[update_blk_no] connect ' + host_name)
+                logger.debug('[update_blk_no] connect ' + host_name)
                 request = 'update_blk_no'
                 send_msg(worker_sock, serialize(request))
                 send_msg(worker_sock, serialize(new_blk_nos))
@@ -240,18 +240,18 @@ class CollectOp(Action):
 if __name__ == '__main__':
     try:
         partition_table = TextFileOp('/wc_dataset.txt')(0)
-        print('[partition table]\n%s' % partition_table)
+        logger.debug('[partition table]\n%s' % partition_table)
 
         MapOp(lambda x: (x, 1))(partition_table, 1)
         partition_table = ReduceByKeyOp(lambda a, b: a + b)(partition_table, 2)
-        print('[new partition table]\n%s' % partition_table)
+        logger.debug('[new partition table]\n%s' % partition_table)
         FilterOp(lambda x: key_func(x) == 'American')(partition_table, 3)
         take_res = TakeOp(20)(partition_table, 4)
         take_res = [str(x) for x in take_res]
-        print('[take]\n%s' % '\n'.join(take_res))
+        logger.debug('[take]\n%s' % '\n'.join(take_res))
         # collect_res = CollectOp()(partition_table, 3)
         # collect_res = [str(x) for x in collect_res]
-        # print('[collect]\n%s' % '\n'.join(collect_res))
+        # logger.debug('[collect]\n%s' % '\n'.join(collect_res))
     finally:
         # clear memory of all nodes whatever
         Operation.clear_memory()
