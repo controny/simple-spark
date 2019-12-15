@@ -243,7 +243,6 @@ class TakeOp(Action):
 
 class CollectOp(Action):
     def __call__(self, partition_tbl, step, *args, **kwargs):
-        # TODO: unable to take all data from all nodes
         return self.take(partition_tbl, -1, step)
 
 
