@@ -112,23 +112,24 @@ class SparkContext(RDD):
 # Test
 if __name__ == '__main__':
     try:
-        sc = SparkContext()
-        text = sc.textFile('/test.txt')
-        mapped = text.map(lambda x: (x, 1))
-        reduced = mapped.reduceByKey(lambda a, b: a + b)
-<<<<<<< HEAD
-        # filterdone = reduced.filter(lambda x: x[0] == 'American')
-        take_res = reduced.take(10)
-        take_res = [str(x) for x in take_res]
-        print('[take]\n%s' % '\n'.join(take_res))
-=======
-        filterdone = reduced.filter(lambda x: x[0] == 'American')
-        take_res = filterdone.take(10)
-        print('[take]\n%s' % '\n'.join([str(x) for x in take_res]))
-        if take_res[0][0] != 'American' or take_res[0][1] != 20:
-            while True:
-                pass
->>>>>>> 6b49d3d9d31a14f7404c09834facab69b84aeda1
+        times = 0
+        temp = []
+        while (times<100):
+            sc = SparkContext()
+            text = sc.textFile('/test.txt')
+            mapped = text.map(lambda x: (x, 1))
+            reduced = mapped.reduceByKey(lambda a, b: a + b)
+            # filterdone = reduced.filter(lambda x: x[0] == 'American')
+            take_res = reduced.take(30)
+            take_res = [str(x) for x in take_res]
+            take_res.sort()
+            print('[take]\n%s' % '\n'.join(take_res))
+            if temp != take_res and times != 0:
+                print("it's diff in times : {} ".format(times))
+                print('[this time]\n%s' % '\n'.join(take_res))
+                break 
+            temp = take_res
+            times += 1
     finally:
         # clear memory of all nodes whatever
         Operation.clear_memory()
