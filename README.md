@@ -4,7 +4,7 @@
 
 该项目基于简单的分布式文件系统实现spark框架，整体的类图为
 
-![20191215170558.png](https://raw.githubusercontent.com/controny/PicBed/master/images/20191215170558.png)
+![20191215170558.png](docs/20191215170558.png)
 
 - **DFSClient**：DFS的客户端，仅进行分布式文件系统的读写操作。
 - **NameNode**：统筹数据的读写。
